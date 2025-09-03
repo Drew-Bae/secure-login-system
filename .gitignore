@@ -1,5 +1,12 @@
 node_modules
-.env
-.env.*
 dist
 coverage
+
+# Ignore real env files
+.env
+.env.local
+.env.development
+.env.production
+
+# But DO commit example files
+!.env.example
