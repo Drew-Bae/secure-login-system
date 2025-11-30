@@ -4,49 +4,58 @@ A portfolio-grade secure authentication platform built to demonstrate real-world
 This project starts with a fully working login system and progressively adds advanced defenses like MFA, suspicious login detection, and an admin security console.
 
 ## Live Demo
-🚧 Coming soon (Phase 1).  
-Once deployed, the latest stable build will always be hosted here.
+- Frontend: https://secure-login-system.vercel.app
+- API Health Check: https://secure-login-system-api.onrender.com/
 
-## Current Features (v0.1)
+## Current Features (v1.0)
 - [x] Repo + monorepo structure initialized
 - [x] Backend / Frontend / Docs folders created
-- [ ] Working Register / Login / Logout (Phase 1)
-- [ ] Password hashing + secure cookie auth (Phase 1)
-- [ ] Login attempt logging (Phase 1)
-- [ ] Basic suspicious login flagging (Phase 1)
+- [x] MongoDB connection with Mongoose
+- [x] User registration with bcrypt password hashing
+- [x] Login with JWT issued into HttpOnly cookie
+- [x] Logout endpoint clearing auth cookie
+- [x] LoginAttempt logging (IP, user agent, success/fail)
+- [x] Deployed API (Render) and frontend (Vercel)
+- [ ] Basic admin view for login attempts (Phase 1.1)
 
 ## Roadmap
 **Phase 1 — Working MVP (Deployable)**
 - Register / Login / Logout
 - bcrypt password hashing
 - JWT stored in HttpOnly cookies
-- Rate limiting + basic validation
-- Deployed demo link
+- CORS + secure cookie handling
+- Rate limiting (to be added)
+- Deployed frontend (Vercel)
+- Deployed API (Render)
 
 **Phase 2 — Hardened Auth**
 - Email verification
 - Forgot / Reset password
 - MFA (TOTP or email codes)
 - Account lockout + cooldown
+- Device tracking
 
 **Phase 3 — Suspicious Login Detection**
 - New IP / new device detection
-- Impossible travel heuristic
-- Risk scoring + step-up auth
+- Impossible travel heuristic (geo-based)
+- Risk scoring system
+- Step-up authentication when risk is high
 - User-visible login history
 
 **Phase 4 — Admin Security Console**
-- View/flag users & attempts
+- View users & login attempts
+- Flag high-risk accounts
 - Lock/unlock accounts
 - Force password reset
-- Export audit logs
+- Export audit logs (CSV / JSON)
 
 ## Security Decisions (Why this matters)
-- **bcrypt hashing** prevents plaintext password compromise.
-- **HttpOnly cookie JWTs** reduce XSS token theft risk.
-- **Rate limiting + lockout** mitigates brute-force attacks.
-- **Audit logging** supports detection and incident response.
-- **Risk scoring & step-up auth** models modern Zero Trust logins.
+- **bcrypt hashing** Protects credentials even if the database is compromised.
+- **HttpOnly JWT cookies** Prevent token theft via XSS.
+- **Session-like JWT strategy** Simplifies frontend logic while maintaing secure cookie boundaries.
+- **Rate limiting (upcoming)** Stops brute-force and credential-stuffing attempts.
+- **Audit logging (AuditAttempt model)** Essential for detection, incident response, and risk scoring.
+- **Suspicious login detection (upcoming)** Models modern Zero Trust logic by evaluating context, not just credentials.
 
 ## Tech Stack (v1)
 - Frontend: React
@@ -54,7 +63,24 @@ Once deployed, the latest stable build will always be hosted here.
 - Database: MongoDB + Mongoose
 - Auth: JWT (HttpOnly cookies)
 - Email: Zoho SMTP (Phase 2)
-- Deployment: Render + Vercel (Phase 1)
+- Deployment: 
+    - Backend: Render
+    - Frontend: Vercel
 
-## Getting Started (will update as we build)
-Phase 1 will add runnable backend and frontend instructions.
+## Getting Started 
+Detailed setup instructions will be added after Phase 1 deployment.
+For now, the project runs with:
+
+### Backend
+```arduino
+cd backend
+npm install
+npm run dev
+```
+
+### Frontend
+```powershell
+cd frontend
+npm install
+npm start
+```
