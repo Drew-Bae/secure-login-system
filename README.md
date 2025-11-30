@@ -4,8 +4,8 @@ A portfolio-grade secure authentication platform built to demonstrate real-world
 This project starts with a fully working login system and progressively adds advanced defenses like MFA, suspicious login detection, and an admin security console.
 
 ## Live Demo
-- Frontend: https://secure-login-system.vercel.app
-- API Health Check: https://secure-login-system-api.onrender.com/
+- Frontend: https://secure-login-system-delta.vercel.app/
+- API Health Check: https://secure-login-system-zhsn.onrender.com
 
 ## Current Features (v1.0)
 - [x] Repo + monorepo structure initialized
