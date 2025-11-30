@@ -3,6 +3,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const cookieParser = require("cookie-parser");
 const connectDB = require("./config/db");
+const authRoutes = require("./routes/authRoutes");
 require("dotenv").config();
 
 const app = express();
@@ -29,5 +30,12 @@ app.get("/", (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
+
+// Trust proxy (for correct IP behind Render later)
+app.set("trust proxy", 1);
+
+// Routes
+app.use("/api/auth", authRoutes);
+
 connectDB();
 app.listen(PORT, () => console.log(`API listening on port ${PORT}`));
