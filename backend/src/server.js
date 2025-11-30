@@ -8,6 +8,8 @@ require("dotenv").config();
 
 const app = express();
 
+app.set("trust proxy", 1); 
+
 // Security headers
 app.use(helmet());
 
@@ -16,10 +18,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// CORS (tighten later when deployed)
+// CORS
+const allowedOrigin = process.env.CLIENT_URL || "http://localhost:3000";
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    origin: allowedOrigin,
     credentials: true,
   })
 );

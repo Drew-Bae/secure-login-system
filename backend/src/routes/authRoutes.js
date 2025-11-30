@@ -7,6 +7,8 @@ const LoginAttempt = require("../models/LoginAttempt");
 
 const router = express.Router();
 
+const isProduction = process.env.NODE_ENV === "production";
+
 // helper to create JWT
 function createToken(userId) {
   return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: "7d" });
@@ -79,8 +81,8 @@ router.post("/login", async (req, res) => {
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: false, // set true in production (HTTPS)
-      sameSite: "lax",
+      secure: isProduction, // HTTPS only in production
+      sameSite: isProduction ? "none" : "lax",
     });
 
     return res.json({ message: "Logged in" });
