@@ -1,0 +1,21 @@
+import axios from "axios";
+
+const api = axios.create({
+  baseURL: "/api",
+  withCredentials: true,
+});
+
+// POST /api/auth/register
+export function registerUser({ email, password }) {
+  return api.post("/auth/register", { email, password });
+}
+
+// POST /api/auth/login
+export function loginUser({ email, password }) {
+  return api.post("/auth/login", { email, password });
+}
+
+// POST /api/auth/logout
+export function logoutUser() {
+  return api.post("/auth/logout");
+}

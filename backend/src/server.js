@@ -38,4 +38,6 @@ app.set("trust proxy", 1);
 app.use("/api/auth", authRoutes);
 
 connectDB();
-app.listen(PORT, () => console.log(`API listening on port ${PORT}`));
+app.listen(PORT, "0.0.0.0", () =>
+  console.log(`API listening on port ${PORT}`)
+);
