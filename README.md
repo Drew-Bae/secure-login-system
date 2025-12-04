@@ -5,7 +5,7 @@ This project starts with a fully working login system and progressively adds adv
 
 ## Live Demo
 - Frontend: https://secure-login-system-delta.vercel.app/
-- API Health Check: https://secure-login-system-zhsn.onrender.com
+- API Health Check (open first and make sure it is running): https://secure-login-system-zhsn.onrender.com
 
 The live demo includes working registration, login, logout, secure HttpOnly cookie handling, login attempt logging, basic suspicious login detection, and an admin view for recent login activity.
 ### **🔐 Demo Admin Account (for testing the Admin Dashboard)**
