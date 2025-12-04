@@ -11,9 +11,8 @@ The live demo includes working registration, login, logout, secure HttpOnly cook
 ### **🔐 Demo Admin Account (for testing the Admin Dashboard)**
 A temporary admin user is provided so reviewers can access the admin dashboard and inspect suspicious login activity. The admin account exists solely for demonstration purposes and has limited access. No sensitive data is stored:
 ```makefile
-cd backend
-npm install
-npm run dev
+Email: admin@example.com  
+Password: pass123
 ```
 This account allows access to:
 - Recent login attempts
