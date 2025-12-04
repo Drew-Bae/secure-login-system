@@ -8,6 +8,18 @@ This project starts with a fully working login system and progressively adds adv
 - API Health Check: https://secure-login-system-zhsn.onrender.com
 
 The live demo includes working registration, login, logout, secure HttpOnly cookie handling, login attempt logging, basic suspicious login detection, and an admin view for recent login activity.
+### **🔐 Demo Admin Account (for testing the Admin Dashboard)**
+A temporary admin user is provided so reviewers can access the admin dashboard and inspect suspicious login activity. The admin account exists solely for demonstration purposes and has limited access. No sensitive data is stored:
+```makefile
+cd backend
+npm install
+npm run dev
+```
+This account allows access to:
+- Recent login attempts
+- Suspicious activity flags
+- IP and User-Agent metadata
+- Detection reasons (multiple failures, new IP, etc.)
 
 ## Current Features (v1.0 - In Progress)
 ### **Foundations**
