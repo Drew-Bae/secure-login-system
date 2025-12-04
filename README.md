@@ -7,55 +7,118 @@ This project starts with a fully working login system and progressively adds adv
 - Frontend: https://secure-login-system-delta.vercel.app/
 - API Health Check: https://secure-login-system-zhsn.onrender.com
 
-## Current Features (v1.0)
-- [x] Repo + monorepo structure initialized
-- [x] Backend / Frontend / Docs folders created
-- [x] MongoDB connection with Mongoose
-- [x] User registration with bcrypt password hashing
-- [x] Login with JWT issued into HttpOnly cookie
-- [x] Logout endpoint clearing auth cookie
-- [x] LoginAttempt logging (IP, user agent, success/fail)
-- [x] Deployed API (Render) and frontend (Vercel)
-- [ ] Basic admin view for login attempts (Phase 1.1)
+The live demo includes working registration, login, logout, secure HttpOnly cookie handling, login attempt logging, basic suspicious login detection, and an admin view for recent login activity.
+
+## Current Features (v1.0 - In Progress)
+### **Foundations**
+- Repo + monorepo structure initialized  
+- Backend scaffolded (Express API)  
+- Frontend scaffolded (React)  
+
+### **Authentication Core (Phase 1)**
+- MongoDB connection via Mongoose  
+- User model with hashed passwords (bcrypt)  
+- Register endpoint  
+- Login endpoint  
+- JWT issued into HttpOnly cookies  
+- Logout endpoint  
+- Frontend Register + Login forms  
+- Frontend wired to backend with Axios  
+- Auth cookie set as HttpOnly and environment-aware (development vs production)  
+
+### **Detection and Visibility (Phase 1.1)**
+- LoginAttempt model storing email, IP, user agent, success/failure, timestamps  
+- Basic suspicious login heuristics:
+  - Multiple failed attempts in a short time window  
+  - Successful login from a new IP for the account  
+- Suspicious attempts tagged with:
+  - `suspicious: true/false`  
+  - `reasons: [ ... ]` (e.g., `"multiple_failed_attempts_recently"`, `"new_ip_for_account"`)  
+- Admin-only API endpoint:
+  - `GET /api/admin/login-attempts?onlySuspicious=true`  
+- Admin UI:
+  - `/admin/login-attempts` page in React  
+  - Table view of recent login attempts (email, IP, user agent, success, suspicious, reasons, time)  
+  - Toggle to show only suspicious attempts
 
 ## Roadmap
-**Phase 1 — Working MVP (Deployable)**
-- Register / Login / Logout
-- bcrypt password hashing
-- JWT stored in HttpOnly cookies
-- CORS + secure cookie handling
-- Rate limiting (to be added)
-- Deployed frontend (Vercel)
-- Deployed API (Render)
 
-**Phase 2 — Hardened Auth**
-- Email verification
-- Forgot / Reset password
-- MFA (TOTP or email codes)
-- Account lockout + cooldown
-- Device tracking
+**Phase 1 — Working MVP (Deployable)**  
+- Register / Login / Logout  
+- bcrypt password hashing  
+- JWT stored in HttpOnly cookies  
+- CORS + secure cookie handling  
+- Frontend hooked to backend (Register & Login pages)  
+- LoginAttempt logging (IP, user agent, success/fail)  
+- Basic suspicious login heuristics (multiple failures, new IP)  
+- Admin API to query login attempts  
+- Admin UI to view login attempts  
+- Deployment:
+  - Frontend on Vercel  
+  - API on Render  
+- Live demo links added to README  
+- Rate limiting (to be added next in Phase 1.x)  
 
-**Phase 3 — Suspicious Login Detection**
-- New IP / new device detection
-- Impossible travel heuristic (geo-based)
-- Risk scoring system
-- Step-up authentication when risk is high
-- User-visible login history
+**Phase 2 — Hardened Auth**  
+- Email verification  
+- Forgot / Reset password  
+- MFA (TOTP or email codes)  
+- Account lockout + cooldown  
+- Device tracking  
 
-**Phase 4 — Admin Security Console**
-- View users & login attempts
-- Flag high-risk accounts
-- Lock/unlock accounts
-- Force password reset
-- Export audit logs (CSV / JSON)
+**Phase 3 — Suspicious Login Detection**  
+- More advanced heuristics (geo-based “impossible travel”)  
+- IP reputation and ASN considerations  
+- Risk scoring system  
+- Step-up authentication when risk is high  
+- User-visible login history  
 
-## Security Decisions (Why this matters)
-- **bcrypt hashing** Protects credentials even if the database is compromised.
-- **HttpOnly JWT cookies** Prevent token theft via XSS.
-- **Session-like JWT strategy** Simplifies frontend logic while maintaing secure cookie boundaries.
-- **Rate limiting (upcoming)** Stops brute-force and credential-stuffing attempts.
-- **Audit logging (AuditAttempt model)** Essential for detection, incident response, and risk scoring.
-- **Suspicious login detection (upcoming)** Models modern Zero Trust logic by evaluating context, not just credentials.
+**Phase 4 — Admin Security Console**  
+- Rich admin dashboard for users & login attempts  
+- Filters and search (by email, IP, time window, risk level)  
+- Flag high-risk accounts  
+- Lock/unlock accounts  
+- Force password reset  
+- Export audit logs (CSV / JSON)  
+
+
+## Security Overview
+
+The Secure Login System is designed to model real-world identity and access security rather than a simple “login form.”
+
+**Authentication and Session Security**  
+- Passwords are hashed with bcrypt before storage in MongoDB.  
+- Authentication is implemented with JWTs set in HttpOnly cookies, reducing exposure to XSS-based token theft.  
+- Cookie options adapt to environment:
+  - Development: `sameSite=lax`, non-secure cookies for localhost  
+  - Production: `sameSite=none`, `secure=true` for cross-site HTTPS between frontend and API  
+
+**Monitoring and Audit Logging**  
+- Every login attempt is recorded with:
+  - Email  
+  - IP address  
+  - User agent  
+  - Success/failure flag  
+  - Timestamps  
+- This provides an audit trail for incident response and supports future threat detection logic.  
+
+**Suspicious Login Detection (Current v1.1)**  
+- Simple heuristics mark certain login attempts as suspicious:
+  - Multiple failed attempts in a short time window  
+  - Successful login from a new IP for the same account  
+- Suspicious attempts are tagged with a boolean (`suspicious`) and structured reasons (e.g., `"multiple_failed_attempts_recently"`, `"new_ip_for_account"`), making them easy to query and visualize.  
+
+**Administrative Visibility**  
+- Admin-only endpoints and UI provide visibility into recent login activity.  
+- The admin page surfaces:
+  - Success/fail status  
+  - Suspicious flag  
+  - IP and user agent context  
+  - Human-readable timestamps  
+- Admin access is enforced via role-based checks on top of JWT authentication.  
+
+Future work expands on this base with email verification, MFA, rate limiting, account lockout, and more advanced risk scoring.
+
 
 ## Tech Stack (v1)
 - Frontend: React
