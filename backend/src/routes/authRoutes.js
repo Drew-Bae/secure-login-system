@@ -52,8 +52,11 @@ router.post("/login", async (req, res) => {
   const userAgent = req.headers["user-agent"] || "unknown";
 
   try {
+    // Basic validation
     if (!email || !password) {
-      return res.status(400).json({ message: "Email and password are required" });
+      return res
+        .status(400)
+        .json({ message: "Email and password are required" });
     }
 
     const user = await User.findOne({ email });
@@ -65,29 +68,78 @@ router.post("/login", async (req, res) => {
       success = match;
     }
 
-    // Log the attempt
+    // --- Suspicious login logic v1 ---
+    const suspiciousReasons = [];
+
+    // Recent attempts for this email (last 10)
+    const recentAttempts = await LoginAttempt.find({ email })
+      .sort({ createdAt: -1 })
+      .limit(10);
+
+    // 1) Multiple recent failures in last 10 minutes
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    const recentFailures = recentAttempts.filter(
+      (a) => a.createdAt > tenMinutesAgo && a.success === false
+    );
+
+    if (!success && recentFailures.length >= 3) {
+      suspiciousReasons.push("multiple_failed_attempts_recently");
+    }
+
+    // 2) Successful login from a new IP
+    if (success) {
+      const hasSeenIpBefore = recentAttempts.some(
+        (a) => a.success === true && a.ip === ip
+      );
+      if (!hasSeenIpBefore) {
+        suspiciousReasons.push("new_ip_for_account");
+      }
+    }
+
+    const suspicious = suspiciousReasons.length > 0;
+
+    // Log the attempt with suspicion metadata
     await LoginAttempt.create({
       email,
       ip,
       userAgent,
       success,
+      suspicious,
+      reasons: suspiciousReasons,
     });
 
+    // If invalid, bail out AFTER logging
     if (!user || !success) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
+    // Create JWT + cookie
     const token = createToken(user._id);
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: isProduction, // HTTPS only in production
+      secure: isProduction,                 // HTTPS only in prod
       sameSite: isProduction ? "none" : "lax",
     });
 
     return res.json({ message: "Logged in" });
   } catch (err) {
     console.error("Login error:", err);
+
+    // Optional: log a failed attempt if something blows up before success
+    try {
+      await LoginAttempt.create({
+        email,
+        ip,
+        userAgent,
+        success: false,
+        suspicious: true,
+        reasons: ["server_error_during_login"],
+      });
+    } catch (logErr) {
+      console.error("Failed to log login attempt:", logErr);
+    }
+
     return res.status(500).json({ message: "Server error" });
   }
 });
