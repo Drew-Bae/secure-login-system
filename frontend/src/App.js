@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
 import Home from "./pages/Home";
 import Register from "./pages/Register";
 import Login from "./pages/Login";
+import AdminLoginAttempts from "./pages/AdminLoginAttempts";
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
           <Link to="/">Home</Link>
           <Link to="/register">Register</Link>
           <Link to="/login">Login</Link>
+          <Link to="/admin/login-attempts">Admin</Link>
         </nav>
       </header>
 
@@ -29,6 +31,10 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
+        <Route
+          path="/admin/login-attempts"
+          element={<AdminLoginAttempts />}
+        />
       </Routes>
     </BrowserRouter>
   );

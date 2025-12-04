@@ -19,3 +19,10 @@ export function loginUser({ email, password }) {
 export function logoutUser() {
   return api.post("/auth/logout");
 }
+
+// GET /api/admin/login-attempts
+export function fetchLoginAttempts({ onlySuspicious = false } = {}) {
+  return api.get("/admin/login-attempts", {
+    params: { onlySuspicious },
+  });
+}
