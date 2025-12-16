@@ -5,6 +5,7 @@ const cookieParser = require("cookie-parser");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const { authLimiter } = require("./middleware/rateLimit");
 require("dotenv").config();
 
 const app = express();
@@ -38,6 +39,9 @@ const PORT = process.env.PORT || 5000;
 
 // Trust proxy (for correct IP behind Render later)
 app.set("trust proxy", 1);
+
+// Rate limiting for auth routes
+app.use("/api/auth", authLimiter);
 
 // Routes
 app.use("/api/auth", authRoutes);
