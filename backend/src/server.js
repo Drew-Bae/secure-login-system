@@ -1,3 +1,5 @@
+require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -6,7 +8,6 @@ const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const { authLimiter } = require("./middleware/rateLimit");
-require("dotenv").config();
 
 const app = express();
 
