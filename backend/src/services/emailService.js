@@ -2,15 +2,24 @@ const { Resend } = require("resend");
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+function cleanEmail(v) {
+  return String(v || "")
+    .trim()
+    .replace(/^['"]+|['"]+$/g, "");
+}
+
 async function sendPasswordResetEmail({ to, resetUrl }) {
   if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) {
     console.log(`[DEV] Password reset link for ${to}: ${resetUrl}`);
     return;
   }
 
+  const fromEmail = cleanEmail(process.env.EMAIL_FROM);
+  const from = `Secure Login System <${fromEmail}>`;
+
   try {
     await resend.emails.send({
-      from: process.env.EMAIL_FROM,
+      from,
       to,
       subject: "Reset your password",
       html: `
