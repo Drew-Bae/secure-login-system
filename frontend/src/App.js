@@ -3,6 +3,8 @@ import Home from "./pages/Home";
 import Register from "./pages/Register";
 import Login from "./pages/Login";
 import AdminLoginAttempts from "./pages/AdminLoginAttempts";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 
 export default function App() {
   return (
@@ -23,6 +25,7 @@ export default function App() {
           <Link to="/">Home</Link>
           <Link to="/register">Register</Link>
           <Link to="/login">Login</Link>
+          <Link to="/forgot-password">Forgot Password</Link>
           <Link to="/admin/login-attempts">Admin</Link>
         </nav>
       </header>
@@ -35,6 +38,8 @@ export default function App() {
           path="/admin/login-attempts"
           element={<AdminLoginAttempts />}
         />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
       </Routes>
     </BrowserRouter>
   );

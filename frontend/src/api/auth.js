@@ -26,3 +26,13 @@ export function fetchLoginAttempts({ onlySuspicious = false } = {}) {
     params: { onlySuspicious },
   });
 }
+
+// POST? /api/auth/forgotPassword
+export function forgotPassword(email) {
+  return api.post("/auth/forgot-password", { email });
+}
+
+// POST? /api/auth/resetPassword
+export function resetPassword({ token, password }) {
+  return api.post("/auth/reset-password", { token, password });
+}

@@ -73,6 +73,9 @@ export default function Login() {
         >
           {loading ? "Logging in..." : "Login"}
         </button>
+        <p style={{ marginTop: 12 }}>
+          <a href="/forgot-password">Forgot password?</a>
+        </p>
       </form>
 
       {loggedIn && (
