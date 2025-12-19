@@ -49,48 +49,43 @@ router.post("/register", async (req, res) => {
 
 // FORGOT PASSWORD
 router.post("/forgot-password", async (req, res) => {
+  const genericResponse = {
+    message: "If that email exists, a password reset link has been sent.",
+  };
+
   try {
     const { email } = req.body;
 
-    // Always respond the same to prevent account enumeration
-    const genericResponse = {
-      message: "If that email exists, a password reset link has been sent.",
-    };
-
-    if (!email) {
-      return res.status(200).json(genericResponse);
-    }
+    if (!email) return res.status(200).json(genericResponse);
 
     const user = await User.findOne({ email });
+    if (!user) return res.status(200).json(genericResponse);
 
-    // If user doesn't exist, still respond generically
-    if (!user) {
-      return res.status(200).json(genericResponse);
-    }
-
-    // Create random token (raw) and hash it for storage
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
-
-    // Expire in 20 minutes
     const expires = new Date(Date.now() + 20 * 60 * 1000);
 
     user.resetPasswordTokenHash = tokenHash;
     user.resetPasswordExpiresAt = expires;
     await user.save();
 
-    // Build reset URL for frontend (we’ll set this in env later)
     const base = process.env.CLIENT_URL || "http://localhost:3000";
     const resetUrl = `${base}/reset-password?token=${rawToken}`;
 
-    await sendPasswordResetEmail({ to: user.email, resetUrl });
+    // If email fails, don't throw the whole route
+    try {
+      await sendPasswordResetEmail({ to: user.email, resetUrl });
+    } catch (e) {
+      console.error("sendPasswordResetEmail failed:", e);
+    }
 
     return res.status(200).json(genericResponse);
   } catch (err) {
     console.error("Forgot password error:", err);
-    return res.status(500).json({ message: "Server error" });
+    return res.status(200).json(genericResponse); // <- important
   }
 });
+
 
 // RESET PASSWORD
 router.post("/reset-password", async (req, res) => {
