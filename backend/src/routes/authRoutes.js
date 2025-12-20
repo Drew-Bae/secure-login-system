@@ -139,31 +139,58 @@ router.post("/login", async (req, res) => {
   const userAgent = req.headers["user-agent"] || "unknown";
 
   try {
-    // Basic validation
     if (!email || !password) {
-      return res
-        .status(400)
-        .json({ message: "Email and password are required" });
+      return res.status(400).json({ message: "Email and password are required" });
     }
 
     const user = await User.findOne({ email });
 
-    let success = false;
+    // Always keep responses generic
+    if (!user) {
+      // still log attempt (unknown user)
+      await LoginAttempt.create({
+        email,
+        ip,
+        userAgent,
+        success: false,
+        suspicious: false,
+        reasons: [],
+      });
 
-    if (user) {
-      const match = await bcrypt.compare(password, user.password);
-      success = match;
+      return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    // --- Suspicious login logic v1 ---
+    // Check lockout
+    const now = new Date();
+    if (user.lockoutUntil && user.lockoutUntil > now) {
+      const suspiciousReasons = ["account_locked"];
+
+      await LoginAttempt.create({
+        email,
+        ip,
+        userAgent,
+        success: false,
+        suspicious: true,
+        reasons: suspiciousReasons,
+      });
+
+      return res.status(429).json({
+        message: "Account temporarily locked. Please try again later.",
+      });
+    }
+
+    // Verify password
+    const match = await bcrypt.compare(password, user.password);
+    const success = match;
+
+    // Suspicious logic v1 (keeps your existing approach)
     const suspiciousReasons = [];
 
-    // Recent attempts for this email (last 10)
     const recentAttempts = await LoginAttempt.find({ email })
       .sort({ createdAt: -1 })
       .limit(10);
 
-    // 1) Multiple recent failures in last 10 minutes
+    // Multiple recent failures in last 10 minutes
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
     const recentFailures = recentAttempts.filter(
       (a) => a.createdAt > tenMinutesAgo && a.success === false
@@ -173,7 +200,7 @@ router.post("/login", async (req, res) => {
       suspiciousReasons.push("multiple_failed_attempts_recently");
     }
 
-    // 2) Successful login from a new IP
+    // Successful login from a new IP
     if (success) {
       const hasSeenIpBefore = recentAttempts.some(
         (a) => a.success === true && a.ip === ip
@@ -183,9 +210,27 @@ router.post("/login", async (req, res) => {
       }
     }
 
+    // Lockout mechanics
+    if (!success) {
+      user.failedLoginCount = (user.failedLoginCount || 0) + 1;
+
+      // Lock after 5 failures
+      if (user.failedLoginCount >= 5) {
+        user.lockoutUntil = new Date(Date.now() + 15 * 60 * 1000);
+        suspiciousReasons.push("lockout_triggered");
+      }
+
+      await user.save();
+    } else {
+      // Reset failure counters on success
+      user.failedLoginCount = 0;
+      user.lockoutUntil = undefined;
+      await user.save();
+    }
+
     const suspicious = suspiciousReasons.length > 0;
 
-    // Log the attempt with suspicion metadata
+    // Log attempt
     await LoginAttempt.create({
       email,
       ip,
@@ -195,38 +240,21 @@ router.post("/login", async (req, res) => {
       reasons: suspiciousReasons,
     });
 
-    // If invalid, bail out AFTER logging
-    if (!user || !success) {
+    if (!success) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    // Create JWT + cookie
     const token = createToken(user._id);
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: isProduction,                 // HTTPS only in prod
+      secure: isProduction,
       sameSite: isProduction ? "none" : "lax",
     });
 
     return res.json({ message: "Logged in" });
   } catch (err) {
     console.error("Login error:", err);
-
-    // Optional: log a failed attempt if something blows up before success
-    try {
-      await LoginAttempt.create({
-        email,
-        ip,
-        userAgent,
-        success: false,
-        suspicious: true,
-        reasons: ["server_error_during_login"],
-      });
-    } catch (logErr) {
-      console.error("Failed to log login attempt:", logErr);
-    }
-
     return res.status(500).json({ message: "Server error" });
   }
 });
