@@ -12,9 +12,18 @@ const isProduction = process.env.NODE_ENV === "production";
 const crypto = require("crypto");
 const { sendPasswordResetEmail } = require("../services/emailService");
 
+const speakeasy = require("speakeasy");
+
 // helper to create JWT
 function createToken(userId) {
   return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: "7d" });
+}
+
+// helper to create PREAUTH_JWT
+function createPreAuthToken(userId) {
+  return jwt.sign({ userId, type: "preauth" }, process.env.PREAUTH_JWT_SECRET, {
+    expiresIn: "5m",
+  });
 }
 
 // REGISTER
@@ -244,6 +253,19 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
+    // If MFA enabled, require step-up verification
+    if (user.mfaEnabled) {
+      const preAuthToken = createPreAuthToken(user._id);
+
+      // Log the attempt as success=true (password correct), but MFA pending
+      // (You can optionally add another reason like "mfa_required".)
+      return res.json({
+        message: "MFA required",
+        mfaRequired: true,
+        preAuthToken,
+      });
+    }
+
     const token = createToken(user._id);
 
     res.cookie("token", token, {
@@ -255,6 +277,58 @@ router.post("/login", async (req, res) => {
     return res.json({ message: "Logged in" });
   } catch (err) {
     console.error("Login error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+// MFA LOGIN
+router.post("/mfa-login", async (req, res) => {
+  try {
+    const { preAuthToken, code } = req.body;
+
+    if (!preAuthToken || !code) {
+      return res.status(400).json({ message: "Invalid request" });
+    }
+
+    let payload;
+    try {
+      payload = jwt.verify(preAuthToken, process.env.PREAUTH_JWT_SECRET);
+    } catch (err) {
+      return res.status(401).json({ message: "Pre-auth token expired or invalid" });
+    }
+
+    if (payload.type !== "preauth") {
+      return res.status(401).json({ message: "Invalid pre-auth token" });
+    }
+
+    const user = await User.findById(payload.userId);
+    if (!user || !user.mfaEnabled || !user.mfaSecret) {
+      return res.status(401).json({ message: "MFA not enabled for this account" });
+    }
+
+    const ok = speakeasy.totp.verify({
+      secret: user.mfaSecret,
+      encoding: "base32",
+      token: String(code).replace(/\s/g, ""),
+      window: 1,
+    });
+
+    if (!ok) {
+      return res.status(400).json({ message: "Invalid MFA code" });
+    }
+
+    // Issue the real auth token
+    const token = createToken(user._id);
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "lax",
+    });
+
+    return res.json({ message: "Logged in with MFA" });
+  } catch (err) {
+    console.error("MFA login error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 });
