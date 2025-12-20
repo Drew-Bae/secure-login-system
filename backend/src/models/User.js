@@ -16,6 +16,8 @@ const userSchema = new mongoose.Schema(
     },
     failedLoginCount: { type: Number, default: 0 },
     lockoutUntil: { type: Date },
+    mfaEnabled: { type: Boolean, default: false },
+    mfaSecret: { type: String }, // base32 secret (Phase 2.3: encrypt at rest)
     role: {
       type: String,
       enum: ["user", "admin"],
