@@ -15,6 +15,19 @@ export default function Login() {
 
     try {
       const res = await loginUser({ email, password });
+
+      // If MFA required, store token and redirect
+      if (res.data?.mfaRequired) {
+        sessionStorage.setItem("preAuthToken", res.data.preAuthToken);
+        setStatus({ type: "success", message: "MFA required. Continue to verification." });
+        setLoggedIn(false);
+        setPassword("");
+
+        // redirect (hard redirect works, but we’ll do SPA navigation)
+        window.location.href = "/mfa-verify";
+        return;
+      }
+
       setStatus({ type: "success", message: res.data.message || "Logged in" });
       setLoggedIn(true);
       setPassword("");

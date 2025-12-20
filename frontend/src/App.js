@@ -5,6 +5,7 @@ import Login from "./pages/Login";
 import AdminLoginAttempts from "./pages/AdminLoginAttempts";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import MfaVerify from "./pages/MfaVerify";
 
 export default function App() {
   return (
@@ -40,6 +41,7 @@ export default function App() {
         />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/mfa-verify" element={<MfaVerify />} />
       </Routes>
     </BrowserRouter>
   );

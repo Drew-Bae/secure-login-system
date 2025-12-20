@@ -27,12 +27,17 @@ export function fetchLoginAttempts({ onlySuspicious = false } = {}) {
   });
 }
 
-// POST? /api/auth/forgotPassword
+// POST? /api/auth/forgot-password
 export function forgotPassword(email) {
   return api.post("/auth/forgot-password", { email });
 }
 
-// POST? /api/auth/resetPassword
+// POST? /api/auth/reset-password
 export function resetPassword({ token, password }) {
   return api.post("/auth/reset-password", { token, password });
+}
+
+// POST? /api/auth/mfa-login
+export function mfaLogin({ preAuthToken, code }) {
+  return api.post("/auth/mfa-login", { preAuthToken, code });
 }
