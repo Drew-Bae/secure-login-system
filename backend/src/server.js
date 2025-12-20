@@ -8,6 +8,7 @@ const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const { authLimiter } = require("./middleware/rateLimit");
+const mfaRoutes = require("./routes/mfaRoutes");
 
 const app = express();
 
@@ -47,6 +48,7 @@ app.use("/api/auth", authLimiter);
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/mfa", mfaRoutes);
 
 connectDB();
 app.listen(PORT, "0.0.0.0", () =>
