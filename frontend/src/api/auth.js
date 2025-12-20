@@ -41,3 +41,13 @@ export function resetPassword({ token, password }) {
 export function mfaLogin({ preAuthToken, code }) {
   return api.post("/auth/mfa-login", { preAuthToken, code });
 }
+
+// POST? /mfa/setup
+export function mfaSetup() {
+  return api.post("/mfa/setup");
+}
+
+// POST? /mfa/verify
+export function mfaVerify(code) {
+  return api.post("/mfa/verify", { code });
+}

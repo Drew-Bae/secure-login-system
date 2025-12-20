@@ -6,6 +6,7 @@ import AdminLoginAttempts from "./pages/AdminLoginAttempts";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import MfaVerify from "./pages/MfaVerify";
+import MfaSetup from "./pages/MfaSetup";
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
           <Link to="/register">Register</Link>
           <Link to="/login">Login</Link>
           <Link to="/forgot-password">Forgot Password</Link>
+          <Link to="/mfa/setup">MFA Setup</Link>
           <Link to="/admin/login-attempts">Admin</Link>
         </nav>
       </header>
@@ -42,6 +44,7 @@ export default function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/mfa-verify" element={<MfaVerify />} />
+        <Route path="/mfa/setup" element={<MfaSetup />} />
       </Routes>
     </BrowserRouter>
   );
