@@ -14,6 +14,7 @@ const userSchema = new mongoose.Schema(
       required: true,
       minlength: 6,
     },
+    
     failedLoginCount: { type: Number, default: 0 },
     lockoutUntil: { type: Date },
     mfaEnabled: { type: Boolean, default: false },
@@ -25,6 +26,7 @@ const userSchema = new mongoose.Schema(
     },
     resetPasswordTokenHash: { type: String },
     resetPasswordExpiresAt: { type: Date },
+    backupCodeHashes: [{ type: String }],
   },
   { timestamps: true }
 );
