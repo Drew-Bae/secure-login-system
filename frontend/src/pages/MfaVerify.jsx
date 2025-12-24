@@ -54,14 +54,13 @@ export default function MfaVerify() {
 
       <form onSubmit={handleSubmit} style={{ maxWidth: 320 }}>
         <label style={{ display: "block", marginTop: 12 }}>
-          Code
+          Code (Authenticator or Backup Code)
           <input
             type="text"
-            inputMode="numeric"
             value={code}
             onChange={(e) => setCode(e.target.value)}
             required
-            placeholder="123456"
+            placeholder="123456 or ABCD-EFGH"
             style={{ display: "block", width: "100%", marginTop: 4 }}
           />
         </label>
@@ -74,6 +73,10 @@ export default function MfaVerify() {
           {loading ? "Verifying..." : "Verify"}
         </button>
       </form>
+
+      <p style={{ marginTop: 12 }}>
+        Need backup codes? <a href="/backup-codes">Generate/view backup codes</a>
+      </p>
 
       {status && (
         <p
