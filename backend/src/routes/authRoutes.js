@@ -306,15 +306,41 @@ router.post("/mfa-login", async (req, res) => {
       return res.status(401).json({ message: "MFA not enabled for this account" });
     }
 
-    const ok = speakeasy.totp.verify({
+    const cleaned = String(code).replace(/\s/g, "");
+
+    // 1) Try TOTP first
+    const totpOk = speakeasy.totp.verify({
       secret: user.mfaSecret,
       encoding: "base32",
-      token: String(code).replace(/\s/g, ""),
+      token: cleaned,
       window: 1,
     });
 
-    if (!ok) {
-      return res.status(400).json({ message: "Invalid MFA code" });
+    let backupUsed = false;
+
+    if (!totpOk) {
+      // 2) Try backup codes (one-time)
+      const hashes = Array.isArray(user.backupCodeHashes) ? user.backupCodeHashes : [];
+
+      let matchedIndex = -1;
+
+      for (let i = 0; i < hashes.length; i++) {
+        const match = await bcrypt.compare(code, hashes[i]);
+        if (match) {
+          matchedIndex = i;
+          break;
+        }
+      }
+
+      if (matchedIndex === -1) {
+        return res.status(400).json({ message: "Invalid MFA code" });
+      }
+
+      // Consume the backup code
+      user.backupCodeHashes.splice(matchedIndex, 1);
+      await user.save();
+
+      backupUsed = true;
     }
 
     // Issue the real auth token
@@ -326,7 +352,9 @@ router.post("/mfa-login", async (req, res) => {
       sameSite: isProduction ? "none" : "lax",
     });
 
-    return res.json({ message: "Logged in with MFA" });
+    return res.json({
+      message: backupUsed ? "Logged in with backup code" : "Logged in with MFA",
+    });
   } catch (err) {
     console.error("MFA login error:", err);
     return res.status(500).json({ message: "Server error" });
