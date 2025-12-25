@@ -1,18 +1,15 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-
 const User = require("../models/User");
 const LoginAttempt = require("../models/LoginAttempt");
-
 const router = express.Router();
-
 const isProduction = process.env.NODE_ENV === "production";
-
 const crypto = require("crypto");
 const { sendPasswordResetEmail } = require("../services/emailService");
-
 const speakeasy = require("speakeasy");
+const { requireAuth } = require("../middleware/authMiddleware");
+
 
 // helper to create JWT
 function createToken(userId) {
@@ -366,5 +363,35 @@ router.post("/logout", (req, res) => {
   res.clearCookie("token");
   return res.json({ message: "Logged out" });
 });
+
+// ME
+router.get("/me", requireAuth, async (req, res) => {
+  const user = req.user;
+  return res.json({
+    user: {
+      id: user._id,
+      email: user.email,
+      role: user.role,
+      mfaEnabled: user.mfaEnabled,
+    },
+  });
+});
+
+// Login History
+router.get("/login-history", requireAuth, async (req, res) => {
+  try {
+    const email = req.user.email;
+
+    const attempts = await LoginAttempt.find({ email })
+      .sort({ createdAt: -1 })
+      .limit(50);
+
+    return res.json({ attempts });
+  } catch (err) {
+    console.error("Login history error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
 
 module.exports = router;
