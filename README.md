@@ -20,7 +20,7 @@ This account allows access to:
 - IP and User-Agent metadata
 - Detection reasons (multiple failures, new IP, etc.)
 
-## Current Features (v3.0 - In Progress)
+## Current Phase 3 (In Progress)
 ### **Advanced Suspicious Login Detection**
 - More advanced heuristics (geo-based “impossible travel”)  
 - IP reputation and ASN considerations  
