@@ -143,6 +143,7 @@ router.post("/login", async (req, res) => {
 
   const ip = req.ip;
   const userAgent = req.headers["user-agent"] || "unknown";
+  const deviceId = req.headers["x-device-id"] || "unknown";
 
   try {
     if (!email || !password) {
@@ -158,6 +159,7 @@ router.post("/login", async (req, res) => {
         email,
         ip,
         userAgent,
+        deviceId,
         success: false,
         suspicious: false,
         reasons: [],
@@ -175,6 +177,7 @@ router.post("/login", async (req, res) => {
         email,
         ip,
         userAgent,
+        deviceId,
         success: false,
         suspicious: true,
         reasons: suspiciousReasons,
@@ -216,6 +219,17 @@ router.post("/login", async (req, res) => {
       }
     }
 
+    // Successful login from a new device
+    if (success) {
+      const hasSeenDeviceBefore = recentAttempts.some(
+        (a) => a.success === true && a.deviceId === deviceId
+      );
+
+      if (!hasSeenDeviceBefore) {
+        suspiciousReasons.push("new_device_for_account");
+      }
+    }
+
     // Lockout mechanics
     if (!success) {
       user.failedLoginCount = (user.failedLoginCount || 0) + 1;
@@ -241,6 +255,7 @@ router.post("/login", async (req, res) => {
       email,
       ip,
       userAgent,
+      deviceId,
       success,
       suspicious,
       reasons: suspiciousReasons,

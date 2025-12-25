@@ -4,8 +4,8 @@ const loginAttemptSchema = new mongoose.Schema(
   {
     email: { type: String, required: true },
     ip: { type: String },
-    deviceId: { type: String },
     userAgent: { type: String },
+    deviceId: { type: String },
     success: { type: Boolean, required: true },
 
     // New fields
