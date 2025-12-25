@@ -20,37 +20,13 @@ This account allows access to:
 - IP and User-Agent metadata
 - Detection reasons (multiple failures, new IP, etc.)
 
-## Current Features (v1.0 - In Progress)
-### **Foundations**
-- Repo + monorepo structure initialized  
-- Backend scaffolded (Express API)  
-- Frontend scaffolded (React)  
-
-### **Authentication Core (Phase 1)**
-- MongoDB connection via Mongoose  
-- User model with hashed passwords (bcrypt)  
-- Register endpoint  
-- Login endpoint  
-- JWT issued into HttpOnly cookies  
-- Logout endpoint  
-- Frontend Register + Login forms  
-- Frontend wired to backend with Axios  
-- Auth cookie set as HttpOnly and environment-aware (development vs production)  
-
-### **Detection and Visibility (Phase 1.1)**
-- LoginAttempt model storing email, IP, user agent, success/failure, timestamps  
-- Basic suspicious login heuristics:
-  - Multiple failed attempts in a short time window  
-  - Successful login from a new IP for the account  
-- Suspicious attempts tagged with:
-  - `suspicious: true/false`  
-  - `reasons: [ ... ]` (e.g., `"multiple_failed_attempts_recently"`, `"new_ip_for_account"`)  
-- Admin-only API endpoint:
-  - `GET /api/admin/login-attempts?onlySuspicious=true`  
-- Admin UI:
-  - `/admin/login-attempts` page in React  
-  - Table view of recent login attempts (email, IP, user agent, success, suspicious, reasons, time)  
-  - Toggle to show only suspicious attempts
+## Current Features (v3.0 - In Progress)
+### **Advanced Suspicious Login Detection**
+- More advanced heuristics (geo-based “impossible travel”)  
+- IP reputation and ASN considerations  
+- Risk scoring system  
+- Step-up authentication when risk is high  
+- User-visible login history  
 
 ## Roadmap
 
