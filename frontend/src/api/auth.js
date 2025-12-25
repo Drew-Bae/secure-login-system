@@ -5,6 +5,24 @@ const api = axios.create({
   withCredentials: true,
 });
 
+function getDeviceId() {
+  const key = "sls_device_id";
+  let id = localStorage.getItem(key);
+
+  if (!id) {
+    id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+    localStorage.setItem(key, id);
+  }
+
+  return id;
+}
+
+api.interceptors.request.use((config) => {
+  config.headers["x-device-id"] = getDeviceId();
+  return config;
+});
+
+
 // POST /api/auth/register
 export function registerUser({ email, password }) {
   return api.post("/auth/register", { email, password });
