@@ -81,6 +81,7 @@ export default function Security() {
                 <th style={thStyle}>Reasons</th>
                 <th style={thStyle}>IP</th>
                 <th style={thStyle}>User Agent</th>
+                <th style={thStyle}>Device</th>
               </tr>
             </thead>
             <tbody>
@@ -108,6 +109,9 @@ export default function Security() {
                     >
                       {a.userAgent || "-"}
                     </span>
+                  </td>
+                  <td style={tdStyle}>
+                    {a.deviceId && a.deviceId !== "unknown" ? a.deviceId.slice(0, 8) : "-"}
                   </td>
                 </tr>
               ))}

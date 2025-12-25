@@ -95,6 +95,7 @@ export default function AdminLoginAttempts() {
                 <th style={thStyle}>Email</th>
                 <th style={thStyle}>IP</th>
                 <th style={thStyle}>User Agent</th>
+                <th style={thStyle}>Device</th>
                 <th style={thStyle}>Success</th>
                 <th style={thStyle}>Suspicious</th>
                 <th style={thStyle}>Reasons</th>
@@ -121,6 +122,9 @@ export default function AdminLoginAttempts() {
                     >
                       {a.userAgent || "-"}
                     </span>
+                  </td>
+                  <td style={tdStyle}>
+                    {a.deviceId && a.deviceId !== "unknown" ? a.deviceId.slice(0, 8) : "-"}
                   </td>
                   <td style={tdStyle}>
                     {a.success ? "✅" : "❌"}
