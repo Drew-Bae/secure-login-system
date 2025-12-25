@@ -8,6 +8,7 @@ import ResetPassword from "./pages/ResetPassword";
 import MfaVerify from "./pages/MfaVerify";
 import MfaSetup from "./pages/MfaSetup";
 import BackupCodes from "./pages/BackupCodes";
+import Security from "./pages/Security";
 
 export default function App() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
           <Link to="/forgot-password">Forgot Password</Link>
           <Link to="/mfa/setup">MFA Setup</Link>
           <Link to="/backup-codes">Backup Codes</Link>
+          <Link to="/security">Security</Link>
           <Link to="/admin/login-attempts">Admin</Link>
         </nav>
       </header>
@@ -48,6 +50,7 @@ export default function App() {
         <Route path="/mfa-verify" element={<MfaVerify />} />
         <Route path="/mfa/setup" element={<MfaSetup />} />
         <Route path="/backup-codes" element={<BackupCodes />} />
+        <Route path="/security" element={<Security />} />
       </Routes>
     </BrowserRouter>
   );

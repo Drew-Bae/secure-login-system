@@ -27,27 +27,27 @@ export function fetchLoginAttempts({ onlySuspicious = false } = {}) {
   });
 }
 
-// POST? /api/auth/forgot-password
+// POST /api/auth/forgot-password
 export function forgotPassword(email) {
   return api.post("/auth/forgot-password", { email });
 }
 
-// POST? /api/auth/reset-password
+// POST /api/auth/reset-password
 export function resetPassword({ token, password }) {
   return api.post("/auth/reset-password", { token, password });
 }
 
-// POST? /api/auth/mfa-login
+// POST /api/auth/mfa-login
 export function mfaLogin({ preAuthToken, code }) {
   return api.post("/auth/mfa-login", { preAuthToken, code });
 }
 
-// POST? /mfa/setup
+// POST /mfa/setup
 export function mfaSetup() {
   return api.post("/mfa/setup");
 }
 
-// POST? /mfa/verify
+// POST /mfa/verify
 export function mfaVerify(code) {
   return api.post("/mfa/verify", { code });
 }
@@ -55,4 +55,14 @@ export function mfaVerify(code) {
 // POST /mfa/backup-codes/generate
 export function generateBackupCodes() {
   return api.post("/mfa/backup-codes/generate");
+}
+
+// GET /auth/me
+export function fetchMe() {
+  return api.get("/auth/me");
+}
+
+// GET /auth/login-history
+export function fetchLoginHistory() {
+  return api.get("/auth/login-history");
 }
