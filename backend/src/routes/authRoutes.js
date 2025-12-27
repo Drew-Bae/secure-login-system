@@ -23,6 +23,32 @@ function createPreAuthToken(userId) {
   });
 }
 
+// helper to compute RiskScore
+function computeRiskScore({ success, reasons = [] }) {
+  // Base score
+  let score = 0;
+
+  // Reason weights (tune anytime)
+  const weights = {
+    new_device_for_account: 35,
+    new_ip_for_account: 20,
+    multiple_failed_attempts_recently: 25,
+    lockout_triggered: 40,
+    account_locked: 50,
+  };
+
+  for (const r of reasons) {
+    score += weights[r] || 5; // unknown reasons get small weight
+  }
+
+  // Add context-based adjustments
+  if (!success) score += 10; // failed attempt is inherently higher risk
+
+  // Clamp 0–100
+  score = Math.max(0, Math.min(100, score));
+  return score;
+}
+
 // REGISTER
 router.post("/register", async (req, res) => {
   try {
@@ -154,6 +180,9 @@ router.post("/login", async (req, res) => {
 
     // Always keep responses generic
     if (!user) {
+      const reasons = [];
+      const riskScore = computeRiskScore({ success: false, reasons });
+
       // still log attempt (unknown user)
       await LoginAttempt.create({
         email,
@@ -162,7 +191,8 @@ router.post("/login", async (req, res) => {
         deviceId,
         success: false,
         suspicious: false,
-        reasons: [],
+        reasons,
+        riskScore,
       });
 
       return res.status(400).json({ message: "Invalid credentials" });
@@ -172,6 +202,7 @@ router.post("/login", async (req, res) => {
     const now = new Date();
     if (user.lockoutUntil && user.lockoutUntil > now) {
       const suspiciousReasons = ["account_locked"];
+      const riskScore = computeRiskScore({ success: false, reasons: suspiciousReasons });
 
       await LoginAttempt.create({
         email,
@@ -181,6 +212,7 @@ router.post("/login", async (req, res) => {
         success: false,
         suspicious: true,
         reasons: suspiciousReasons,
+        riskScore,
       });
 
       return res.status(429).json({
@@ -250,6 +282,8 @@ router.post("/login", async (req, res) => {
 
     const suspicious = suspiciousReasons.length > 0;
 
+    const riskScore = computeRiskScore({ success, reasons: suspiciousReasons });
+
     // Log attempt
     await LoginAttempt.create({
       email,
@@ -259,6 +293,7 @@ router.post("/login", async (req, res) => {
       success,
       suspicious,
       reasons: suspiciousReasons,
+      riskScore,
     });
 
     if (!success) {
@@ -275,6 +310,8 @@ router.post("/login", async (req, res) => {
         message: "MFA required",
         mfaRequired: true,
         preAuthToken,
+        riskScore,
+        reasons: suspiciousReasons,
       });
     }
 
