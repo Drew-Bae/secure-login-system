@@ -78,10 +78,11 @@ export default function Security() {
                 <th style={thStyle}>Time</th>
                 <th style={thStyle}>Success</th>
                 <th style={thStyle}>Suspicious</th>
+                <th style={thStyle}>Risk</th>
                 <th style={thStyle}>Reasons</th>
                 <th style={thStyle}>IP</th>
-                <th style={thStyle}>User Agent</th>
                 <th style={thStyle}>Device</th>
+                <th style={thStyle}>User Agent</th>
               </tr>
             </thead>
             <tbody>
@@ -91,11 +92,17 @@ export default function Security() {
                   <td style={tdStyle}>{a.success ? "✅" : "❌"}</td>
                   <td style={tdStyle}>{a.suspicious ? "⚠️ Yes" : "No"}</td>
                   <td style={tdStyle}>
+                    {typeof a.riskScore === "number" ? a.riskScore : "-"}
+                  </td>
+                  <td style={tdStyle}>
                     {Array.isArray(a.reasons) && a.reasons.length > 0
                       ? a.reasons.join(", ")
                       : "-"}
                   </td>
                   <td style={tdStyle}>{a.ip || "-"}</td>
+                  <td style={tdStyle}>
+                    {a.deviceId && a.deviceId !== "unknown" ? a.deviceId.slice(0, 8) : "-"}
+                  </td>
                   <td style={tdStyle}>
                     <span
                       style={{
@@ -109,9 +116,6 @@ export default function Security() {
                     >
                       {a.userAgent || "-"}
                     </span>
-                  </td>
-                  <td style={tdStyle}>
-                    {a.deviceId && a.deviceId !== "unknown" ? a.deviceId.slice(0, 8) : "-"}
                   </td>
                 </tr>
               ))}
