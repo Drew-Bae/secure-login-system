@@ -23,6 +23,9 @@ function createPreAuthToken(userId) {
   });
 }
 
+const RISK_WARN_THRESHOLD = 60;
+const RISK_BLOCK_THRESHOLD = 85;
+
 // helper to compute RiskScore
 function computeRiskScore({ success, reasons = [] }) {
   // Base score
@@ -280,9 +283,20 @@ router.post("/login", async (req, res) => {
       await user.save();
     }
 
-    const suspicious = suspiciousReasons.length > 0;
+    // Step 2: compute AFTER final reasons list (we may add high_risk_login)
+    let riskScore = computeRiskScore({ success, reasons: suspiciousReasons });
 
-    const riskScore = computeRiskScore({ success, reasons: suspiciousReasons });
+    const highRisk = riskScore >= RISK_WARN_THRESHOLD;
+    const blockRisk = riskScore >= RISK_BLOCK_THRESHOLD;
+
+    // Optional: tag high risk explicitly (helps analytics + UI)
+    if (success && highRisk && !suspiciousReasons.includes("high_risk_login")) {
+      suspiciousReasons.push("high_risk_login");
+      // Recompute so score matches final reasons (Step 2)
+      riskScore = computeRiskScore({ success, reasons: suspiciousReasons });
+    }
+
+    const suspicious = suspiciousReasons.length > 0;
 
     // Log attempt
     await LoginAttempt.create({
@@ -311,6 +325,18 @@ router.post("/login", async (req, res) => {
         mfaRequired: true,
         preAuthToken,
         riskScore,
+        highRisk,
+        reasons: suspiciousReasons,
+      });
+    }
+
+    // Risk-based policy when MFA is NOT enabled
+    if (!user.mfaEnabled && success && blockRisk) {
+      // Log attempt already recorded; do NOT issue JWT
+      return res.status(403).json({
+        message: "High-risk login blocked. Please enable MFA to continue.",
+        actionRequired: "ENABLE_MFA",
+        riskScore,
         reasons: suspiciousReasons,
       });
     }
@@ -323,7 +349,12 @@ router.post("/login", async (req, res) => {
       sameSite: isProduction ? "none" : "lax",
     });
 
-    return res.json({ message: "Logged in" });
+    return res.json({ 
+      message: "Logged in",
+      riskScore,
+      highRisk,
+      reasons: suspiciousReasons, 
+    });
   } catch (err) {
     console.error("Login error:", err);
     return res.status(500).json({ message: "Server error" });
