@@ -23,8 +23,8 @@ function createPreAuthToken(userId) {
   });
 }
 
-const RISK_WARN_THRESHOLD = 60;
-const RISK_BLOCK_THRESHOLD = 85;
+const RISK_WARN_THRESHOLD = 50;
+const RISK_BLOCK_THRESHOLD = 70;
 
 // helper to compute RiskScore
 function computeRiskScore({ success, reasons = [] }) {
