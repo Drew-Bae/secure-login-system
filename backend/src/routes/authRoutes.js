@@ -9,6 +9,7 @@ const crypto = require("crypto");
 const { sendPasswordResetEmail } = require("../services/emailService");
 const speakeasy = require("speakeasy");
 const { requireAuth } = require("../middleware/authMiddleware");
+const geoip = require("geoip-lite");
 
 
 // helper to create JWT
@@ -38,6 +39,8 @@ function computeRiskScore({ success, reasons = [] }) {
     multiple_failed_attempts_recently: 25,
     lockout_triggered: 40,
     account_locked: 50,
+    impossible_travel: 60,
+    high_risk_login: 15, // if you added this earlier
   };
 
   for (const r of reasons) {
@@ -50,6 +53,24 @@ function computeRiskScore({ success, reasons = [] }) {
   // Clamp 0–100
   score = Math.max(0, Math.min(100, score));
   return score;
+}
+
+// helper for geo-location
+function toRad(d) {
+  return (d * Math.PI) / 180;
+}
+
+function haversineMiles(lat1, lon1, lat2, lon2) {
+  const R = 3958.8; // Earth radius in miles
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
 }
 
 // REGISTER
@@ -170,9 +191,20 @@ router.post("/reset-password", async (req, res) => {
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
-  const ip = req.ip;
+  const rawIp = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip;
+  const ip = rawIp?.startsWith("::ffff:") ? rawIp.replace("::ffff:", "") : rawIp;
   const userAgent = req.headers["user-agent"] || "unknown";
   const deviceId = req.headers["x-device-id"] || "unknown";
+
+  const geo = geoip.lookup(ip);
+  const geoObj = geo
+    ? {
+        country: geo.country,
+        region: geo.region,
+        city: geo.city,
+        ll: geo.ll, // [lat, lon]
+      }
+    : undefined;
 
   try {
     if (!email || !password) {
@@ -196,6 +228,7 @@ router.post("/login", async (req, res) => {
         suspicious: false,
         reasons,
         riskScore,
+        geo: geoObj,
       });
 
       return res.status(400).json({ message: "Invalid credentials" });
@@ -216,6 +249,7 @@ router.post("/login", async (req, res) => {
         suspicious: true,
         reasons: suspiciousReasons,
         riskScore,
+        geo: geoObj,
       });
 
       return res.status(429).json({
@@ -265,6 +299,31 @@ router.post("/login", async (req, res) => {
       }
     }
 
+    // Impossible travel heuristic: compare to last successful login with geo
+    if (success && geoObj?.ll?.length === 2) {
+      const lastSuccessWithGeo = recentAttempts.find(
+        (a) => a.success === true && a.geo?.ll?.length === 2
+      );
+
+      if (lastSuccessWithGeo) {
+        const [lat1, lon1] = lastSuccessWithGeo.geo.ll;
+        const [lat2, lon2] = geoObj.ll;
+
+        const miles = haversineMiles(lat1, lon1, lat2, lon2);
+
+        const prevTime = new Date(lastSuccessWithGeo.createdAt).getTime();
+        const nowTime = Date.now();
+        const hours = Math.max(0.001, (nowTime - prevTime) / (1000 * 60 * 60));
+
+        const mph = miles / hours;
+
+        // Threshold: faster than commercial air travel + airport time buffer
+        if (miles >= 300 && mph > 600) {
+          suspiciousReasons.push("impossible_travel");
+        }
+      }
+    }
+
     // Lockout mechanics
     if (!success) {
       user.failedLoginCount = (user.failedLoginCount || 0) + 1;
@@ -308,6 +367,7 @@ router.post("/login", async (req, res) => {
       suspicious,
       reasons: suspiciousReasons,
       riskScore,
+      geo: geoObj,
     });
 
     if (!success) {
