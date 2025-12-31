@@ -94,6 +94,7 @@ export default function AdminLoginAttempts() {
                 <th style={thStyle}>Time</th>
                 <th style={thStyle}>Email</th>
                 <th style={thStyle}>IP</th>
+                <th style={thStyle}>Country/City</th>
                 <th style={thStyle}>User Agent</th>
                 <th style={thStyle}>Device</th>
                 <th style={thStyle}>Success</th>
@@ -110,6 +111,9 @@ export default function AdminLoginAttempts() {
                   </td>
                   <td style={tdStyle}>{a.email}</td>
                   <td style={tdStyle}>{a.ip || "-"}</td>
+                  <td style={tdStyle}>
+                    {a.geo?.country ? `${a.geo.country}${a.geo.city ? " / " + a.geo.city : ""}` : "-"}
+                  </td>
                   <td style={tdStyle}>
                     <span
                       style={{

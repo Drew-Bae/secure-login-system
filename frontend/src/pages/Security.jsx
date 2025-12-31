@@ -81,6 +81,7 @@ export default function Security() {
                 <th style={thStyle}>Risk</th>
                 <th style={thStyle}>Reasons</th>
                 <th style={thStyle}>IP</th>
+                <th style={thStyle}>Country/City</th>
                 <th style={thStyle}>Device</th>
                 <th style={thStyle}>User Agent</th>
               </tr>
@@ -100,6 +101,9 @@ export default function Security() {
                       : "-"}
                   </td>
                   <td style={tdStyle}>{a.ip || "-"}</td>
+                  <td style={tdStyle}>
+                    {a.geo?.country ? `${a.geo.country}${a.geo.city ? " / " + a.geo.city : ""}` : "-"}
+                  </td>
                   <td style={tdStyle}>
                     {a.deviceId && a.deviceId !== "unknown" ? a.deviceId.slice(0, 8) : "-"}
                   </td>
