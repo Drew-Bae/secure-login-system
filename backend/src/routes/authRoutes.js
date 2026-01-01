@@ -512,6 +512,11 @@ router.post("/mfa-login", async (req, res) => {
 
 
     const cleaned = String(code).replace(/\s/g, "");
+    const normalized = cleaned.toUpperCase();
+
+    // Allow users to type backup code with or without dash
+    const normalizedBackupCandidate =
+      normalized.length === 8 ? `${normalized.slice(0, 4)}-${normalized.slice(4)}` : normalized;
 
     // 1) Try TOTP first
     const totpOk = speakeasy.totp.verify({
@@ -530,7 +535,7 @@ router.post("/mfa-login", async (req, res) => {
       let matchedIndex = -1;
 
       for (let i = 0; i < hashes.length; i++) {
-        const match = await bcrypt.compare(code, hashes[i]);
+        const match = await bcrypt.compare(normalizedBackupCandidate, hashes[i]);
         if (match) {
           matchedIndex = i;
           break;
