@@ -5,21 +5,9 @@ const api = axios.create({
   withCredentials: true,
 });
 
-api.interceptors.request.use(async (config) => {
-  const method = (config.method || "get").toLowerCase();
-
-  // Only attach CSRF for state-changing requests
-  if (["post", "put", "patch", "delete"].includes(method)) {
-    const token = await ensureCsrf();
-    if (token) {
-      config.headers["X-CSRF-Token"] = token;
-    }
-  }
-
-  // your existing device header logic (if present below) should still apply
-  return config;
-});
-
+/**
+ * ---- Device ID header (keep as-is) ----
+ */
 function getDeviceId() {
   const key = "sls_device_id";
   let id = localStorage.getItem(key);
@@ -37,20 +25,51 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-function getCookie(name) {
-  const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
-  return match ? decodeURIComponent(match[2]) : null;
+/**
+ * ---- CSRF (double-submit) ----
+ * Backend sets a csrfToken cookie (on API origin)
+ * Frontend cannot reliably read that cookie cross-origin,
+ * so we store the token returned from GET /auth/csrf in sessionStorage
+ * and send it in X-CSRF-Token for state-changing requests.
+ */
+const CSRF_STORAGE_KEY = "sls_csrf_token";
+
+function getStoredCsrf() {
+  return sessionStorage.getItem(CSRF_STORAGE_KEY);
+}
+
+function setStoredCsrf(token) {
+  if (token) sessionStorage.setItem(CSRF_STORAGE_KEY, token);
+}
+
+async function mintCsrf() {
+  const res = await api.get("/auth/csrf");
+  const token = res.data?.csrfToken;
+  setStoredCsrf(token);
+  return token;
 }
 
 async function ensureCsrf() {
-  let token = getCookie("csrfToken");
-  if (!token) {
-    // mint token cookie
-    await api.get("/auth/csrf");
-    token = getCookie("csrfToken");
-  }
+  let token = getStoredCsrf();
+  if (!token) token = await mintCsrf();
   return token;
 }
+
+// Attach CSRF header for state-changing requests
+api.interceptors.request.use(async (config) => {
+  const method = (config.method || "get").toLowerCase();
+
+  if (["post", "put", "patch", "delete"].includes(method)) {
+    const token = await ensureCsrf();
+    if (token) config.headers["X-CSRF-Token"] = token;
+  }
+
+  return config;
+});
+
+/**
+ * ---- API wrappers ----
+ */
 
 // POST /api/auth/register
 export function registerUser({ email, password }) {
