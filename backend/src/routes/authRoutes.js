@@ -506,9 +506,10 @@ router.post("/mfa-login", async (req, res) => {
     }
 
     const user = await User.findById(payload.userId);
-    if (!user || !user.mfaEnabled || !user.mfaSecret) {
+    if (!user || !user.mfaEnabled || !user.mfaSecretEncrypted) {
       return res.status(401).json({ message: "MFA not enabled for this account" });
     }
+
 
     const cleaned = String(code).replace(/\s/g, "");
 
