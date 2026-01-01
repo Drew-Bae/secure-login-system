@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { mfaLogin } from "../api/auth";
+import { useAuth } from "../context/AuthContext";
 
 export default function MfaVerify() {
   const navigate = useNavigate();
   const [code, setCode] = useState("");
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
+  const { refreshMe } = useAuth();
 
   const preAuthToken = sessionStorage.getItem("preAuthToken");
 
@@ -22,8 +24,11 @@ export default function MfaVerify() {
       // Clear token after successful verification
       sessionStorage.removeItem("preAuthToken");
 
-      // Send user somewhere obvious (you can later add /dashboard)
-      navigate("/");
+      // Hydrate auth state, then send them to the Security page (visual cue)
+      await refreshMe();
+      navigate("/security", { replace: true });
+      return;
+
     } catch (err) {
       const message =
         err.response?.data?.message || "Invalid code or session expired.";

@@ -1,15 +1,23 @@
-import { useState } from "react";
-import { loginUser, logoutUser } from "../api/auth";
+import { useEffect, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 export default function Login() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user, login } = useAuth();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
-
-  const [loggedIn, setLoggedIn] = useState(false);
   const [showEnableMfaLink, setShowEnableMfaLink] = useState(false);
+
+  // If already logged in, send user to a meaningful page
+  useEffect(() => {
+    if (user) navigate("/security");
+  }, [user, navigate]);
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -18,18 +26,14 @@ export default function Login() {
     setShowEnableMfaLink(false);
 
     try {
-      const res = await loginUser({ email, password });
+      const res = await login({ email, password });
 
       // MFA step-up required
       if (res.data?.mfaRequired) {
         sessionStorage.setItem("preAuthToken", res.data.preAuthToken);
-        setStatus({
-          type: "success",
-          message: "MFA required. Continue to verification.",
-        });
-        setLoggedIn(false);
+        setStatus({ type: "success", message: "MFA required. Continue to verification." });
         setPassword("");
-        window.location.href = "/mfa-verify";
+        navigate("/mfa-verify");
         return;
       }
 
@@ -41,46 +45,29 @@ export default function Login() {
         });
         setShowEnableMfaLink(true);
       } else {
-        setStatus({
-          type: "success",
-          message: res.data?.message || "Logged in",
-        });
+        setStatus({ type: "success", message: res.data?.message || "Logged in" });
       }
 
-      setLoggedIn(true);
       setPassword("");
+
+      // Navigate back to the page the user originally requested, if any
+      const from = location.state?.from || "/security";
+      navigate(from);
     } catch (err) {
       const code = err.response?.status;
       const data = err.response?.data;
 
       // Risk-based block when MFA is not enabled
       if (code === 403 && data?.actionRequired === "ENABLE_MFA") {
-        setStatus({
-          type: "error",
-          message: `${data.message} (Risk: ${data.riskScore})`,
-        });
-        setLoggedIn(false);
+        setStatus({ type: "error", message: `${data.message} (Risk: ${data.riskScore})` });
         setShowEnableMfaLink(true);
         return;
       }
 
-      const message =
-        err.response?.data?.message || "Login failed. Check your credentials.";
+      const message = err.response?.data?.message || "Login failed. Check your credentials.";
       setStatus({ type: "error", message });
-      setLoggedIn(false);
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function handleLogout() {
-    try {
-      await logoutUser();
-      setLoggedIn(false);
-      setStatus({ type: "success", message: "Logged out" });
-    } catch (err) {
-      const message = err.response?.data?.message || "Logout failed. Try again.";
-      setStatus({ type: "error", message });
     }
   }
 
@@ -111,11 +98,7 @@ export default function Login() {
           />
         </label>
 
-        <button
-          type="submit"
-          disabled={loading}
-          style={{ marginTop: 16, padding: "8px 16px" }}
-        >
+        <button type="submit" disabled={loading} style={{ marginTop: 16, padding: "8px 16px" }}>
           {loading ? "Logging in..." : "Login"}
         </button>
 
@@ -124,23 +107,9 @@ export default function Login() {
         </p>
       </form>
 
-      {loggedIn && (
-        <button
-          onClick={handleLogout}
-          style={{ marginTop: 16, padding: "6px 12px" }}
-        >
-          Logout
-        </button>
-      )}
-
       {status && (
         <>
-          <p
-            style={{
-              marginTop: 16,
-              color: status.type === "error" ? "crimson" : "green",
-            }}
-          >
+          <p style={{ marginTop: 16, color: status.type === "error" ? "crimson" : "green" }}>
             {status.message}
           </p>
 
