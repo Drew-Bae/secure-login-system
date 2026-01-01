@@ -118,11 +118,6 @@ export function mfaVerify(code) {
   return api.post("/mfa/verify", { code });
 }
 
-// POST /mfa/backup-codes/generate
-export function generateBackupCodes() {
-  return api.post("/mfa/backup-codes/generate");
-}
-
 // GET /auth/me
 export function fetchMe() {
   return api.get("/auth/me");

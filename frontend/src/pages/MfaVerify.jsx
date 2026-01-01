@@ -75,7 +75,7 @@ export default function MfaVerify() {
       </form>
 
       <p style={{ marginTop: 12 }}>
-        Need backup codes? <a href="/backup-codes">Generate/view backup codes</a>
+        Lost your authenticator? Use one of the backup codes you saved during MFA setup.
       </p>
 
       {status && (
