@@ -28,6 +28,9 @@ function createPreAuthToken(userId) {
 
 const RISK_WARN_THRESHOLD = 60;
 const RISK_BLOCK_THRESHOLD = 85;
+const NEW_ACCOUNT_GRACE_HOURS = 24;
+const NEW_ACCOUNT_SUCCESS_LOGINS_GRACE = 2;
+const NEW_ACCOUNT_RISK_CAP = 40;
 
 // helper to compute RiskScore
 function computeRiskScore({ success, reasons = [] }) {
@@ -42,7 +45,7 @@ function computeRiskScore({ success, reasons = [] }) {
     lockout_triggered: 40,
     account_locked: 50,
     impossible_travel: 60,
-    high_risk_login: 15, // if you added this earlier
+    high_risk_login: 0, // if you added this earlier
     device_untrusted: 25,
   };
 
@@ -274,6 +277,15 @@ router.post("/login", async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(10);
 
+    const accountAgeHours =
+      (Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60);
+
+    const priorSuccessfulLogins = recentAttempts.filter((a) => a.success === true).length;
+
+    const isNewAccount =
+      accountAgeHours < NEW_ACCOUNT_GRACE_HOURS &&
+      priorSuccessfulLogins < NEW_ACCOUNT_SUCCESS_LOGINS_GRACE;
+
     // Multiple recent failures in last 10 minutes
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
     const recentFailures = recentAttempts.filter(
@@ -285,7 +297,7 @@ router.post("/login", async (req, res) => {
     }
 
     // Successful login from a new IP
-    if (success) {
+    if (success && !isNewAccount) {
       const hasSeenIpBefore = recentAttempts.some(
         (a) => a.success === true && a.ip === ip
       );
@@ -328,13 +340,15 @@ router.post("/login", async (req, res) => {
       );
 
       // Risk reasons
-      if (isNewDevice) {
-        suspiciousReasons.push("new_device_for_account");
-        suspiciousReasons.push("device_untrusted");
-      } else {
-        const known = await TrustedDevice.findOne({ userId: user._id, deviceId });
-        if (!known.trusted) {
+      if (!isNewAccount) {
+        if (isNewDevice) {
+          suspiciousReasons.push("new_device_for_account");
           suspiciousReasons.push("device_untrusted");
+        } else {
+          const known = await TrustedDevice.findOne({ userId: user._id, deviceId });
+          if (known && !known.trusted) {
+            suspiciousReasons.push("device_untrusted");
+          }
         }
       }
     }
@@ -384,20 +398,27 @@ router.post("/login", async (req, res) => {
       await user.save();
     }
 
-    // Step 2: compute AFTER final reasons list (we may add high_risk_login)
-    let riskScore = computeRiskScore({ success, reasons: suspiciousReasons });
+    // Compute risk once from "signal" reasons only (exclude label reasons)
+    let riskScore = computeRiskScore({
+      success,
+      reasons: suspiciousReasons.filter((r) => r !== "high_risk_login"),
+    });
+
+    // New account cap (extra safety even after reason suppression)
+    if (isNewAccount) {
+      riskScore = Math.min(riskScore, NEW_ACCOUNT_RISK_CAP);
+    }
 
     const highRisk = riskScore >= RISK_WARN_THRESHOLD;
     const blockRisk = riskScore >= RISK_BLOCK_THRESHOLD;
 
-    // Optional: tag high risk explicitly (helps analytics + UI)
+    // Add label for UI/audit only (do NOT recompute)
     if (success && highRisk && !suspiciousReasons.includes("high_risk_login")) {
       suspiciousReasons.push("high_risk_login");
-      // Recompute so score matches final reasons (Step 2)
-      riskScore = computeRiskScore({ success, reasons: suspiciousReasons });
     }
 
-    const suspicious = suspiciousReasons.length > 0;
+    // Suspicious should be tied to risk, not "any reason exists"
+    const suspicious = riskScore >= RISK_WARN_THRESHOLD;
 
     // Log attempt
     await LoginAttempt.create({
