@@ -5,6 +5,21 @@ const api = axios.create({
   withCredentials: true,
 });
 
+api.interceptors.request.use(async (config) => {
+  const method = (config.method || "get").toLowerCase();
+
+  // Only attach CSRF for state-changing requests
+  if (["post", "put", "patch", "delete"].includes(method)) {
+    const token = await ensureCsrf();
+    if (token) {
+      config.headers["X-CSRF-Token"] = token;
+    }
+  }
+
+  // your existing device header logic (if present below) should still apply
+  return config;
+});
+
 function getDeviceId() {
   const key = "sls_device_id";
   let id = localStorage.getItem(key);
@@ -22,6 +37,20 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+function getCookie(name) {
+  const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
+  return match ? decodeURIComponent(match[2]) : null;
+}
+
+async function ensureCsrf() {
+  let token = getCookie("csrfToken");
+  if (!token) {
+    // mint token cookie
+    await api.get("/auth/csrf");
+    token = getCookie("csrfToken");
+  }
+  return token;
+}
 
 // POST /api/auth/register
 export function registerUser({ email, password }) {
