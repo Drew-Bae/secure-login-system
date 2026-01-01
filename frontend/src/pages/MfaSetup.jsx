@@ -6,6 +6,7 @@ export default function MfaSetup() {
   const [code, setCode] = useState("");
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [backupCodes, setBackupCodes] = useState([]);
 
   async function handleStart() {
     setLoading(true);
@@ -33,10 +34,17 @@ export default function MfaSetup() {
 
     try {
       const res = await mfaVerify(code);
+
+      const codes = res.data?.backupCodes || [];
+      setBackupCodes(codes);
+
       setStatus({
         type: "success",
-        message: res.data?.message || "MFA enabled successfully.",
+        message:
+          res.data?.message ||
+          "MFA enabled. Save your backup codes now — you won’t be able to view them again.",
       });
+
       setCode("");
     } catch (err) {
       const message =
@@ -117,6 +125,45 @@ export default function MfaSetup() {
       <p style={{ marginTop: 16, color: "#666" }}>
         Note: You must be logged in to start MFA setup.
       </p>
+
+      {backupCodes.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <h3 style={{ marginBottom: 8 }}>Your Backup Codes</h3>
+          <p style={{ color: "#b45309", marginTop: 0 }}>
+            Save these الآن. For security, they will not be shown again.
+          </p>
+
+          <div
+            style={{
+              border: "1px solid #ddd",
+              borderRadius: 8,
+              padding: 12,
+              maxWidth: 360,
+              background: "#fafafa",
+            }}
+          >
+            {backupCodes.map((c) => (
+              <div
+                key={c}
+                style={{
+                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                  padding: "4px 0",
+                }}
+              >
+                {c}
+              </div>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => navigator.clipboard.writeText(backupCodes.join("\n"))}
+            style={{ marginTop: 12, padding: "6px 12px" }}
+          >
+            Copy all
+          </button>
+        </div>
+      )}
     </div>
   );
 }
