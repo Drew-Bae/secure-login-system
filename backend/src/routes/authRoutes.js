@@ -10,6 +10,7 @@ const { sendPasswordResetEmail } = require("../services/emailService");
 const speakeasy = require("speakeasy");
 const { requireAuth } = require("../middleware/authMiddleware");
 const geoip = require("geoip-lite");
+const TrustedDevice = require("../models/TrustedDevice");
 
 
 // helper to create JWT
@@ -41,6 +42,7 @@ function computeRiskScore({ success, reasons = [] }) {
     account_locked: 50,
     impossible_travel: 60,
     high_risk_login: 15, // if you added this earlier
+    device_untrusted: 25,
   };
 
   for (const r of reasons) {
@@ -288,16 +290,52 @@ router.post("/login", async (req, res) => {
       }
     }
 
-    // Successful login from a new device
-    if (success) {
-      const hasSeenDeviceBefore = recentAttempts.some(
-        (a) => a.success === true && a.deviceId === deviceId
+    // device check
+    // ---- DEVICE TRACKING & TRUST LOGIC ----
+    let isNewDevice = false;
+
+    if (success && deviceId && deviceId !== "unknown") {
+      // Check if device existed BEFORE upsert
+      const existedBefore = await TrustedDevice.exists({
+        userId: user._id,
+        deviceId,
+      });
+
+      isNewDevice = !existedBefore;
+
+      // Upsert device (always update metadata)
+      await TrustedDevice.findOneAndUpdate(
+        { userId: user._id, deviceId },
+        {
+          $setOnInsert: {
+            userId: user._id,
+            deviceId,
+            firstSeenAt: new Date(),
+            trusted: false,
+          },
+          $set: {
+            lastSeenAt: new Date(),
+            lastIp: ip,
+            lastUserAgent: userAgent,
+            lastGeo: geoObj,
+          },
+        },
+        { upsert: true, new: true }
       );
 
-      if (!hasSeenDeviceBefore) {
+      // Risk reasons
+      if (isNewDevice) {
         suspiciousReasons.push("new_device_for_account");
+        suspiciousReasons.push("device_untrusted");
+      } else {
+        const known = await TrustedDevice.findOne({ userId: user._id, deviceId });
+        if (!known.trusted) {
+          suspiciousReasons.push("device_untrusted");
+        }
       }
     }
+    // ---- END DEVICE LOGIC ----
+
 
     // Impossible travel heuristic: compare to last successful login with geo
     if (success && geoObj?.ll?.length === 2) {
