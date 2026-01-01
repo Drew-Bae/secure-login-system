@@ -10,10 +10,9 @@ const adminRoutes = require("./routes/adminRoutes");
 const { authLimiter } = require("./middleware/rateLimit");
 const mfaRoutes = require("./routes/mfaRoutes");
 const deviceRoutes = require("./routes/deviceRoutes");
+const { csrfProtect } = require("./middleware/csrf");
 
 const app = express();
-
-app.set("trust proxy", 1); 
 
 // Security headers
 app.use(helmet());
@@ -32,6 +31,8 @@ app.use(
     credentials: true,
   })
 );
+
+app.use(csrfProtect);
 
 // Health check
 app.get("/", (req, res) => {

@@ -11,6 +11,7 @@ const speakeasy = require("speakeasy");
 const { requireAuth } = require("../middleware/authMiddleware");
 const geoip = require("geoip-lite");
 const TrustedDevice = require("../models/TrustedDevice");
+const { csrfIssue } = require("../middleware/csrf");
 
 
 // helper to create JWT
@@ -74,6 +75,9 @@ function haversineMiles(lat1, lon1, lat2, lon2) {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
+
+// GET /api/auth/csrf
+router.get("/csrf", csrfIssue);
 
 // REGISTER
 router.post("/register", async (req, res) => {
