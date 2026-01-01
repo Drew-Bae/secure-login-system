@@ -8,6 +8,14 @@ const { encrypt, decrypt } = require("../utils/crypto");
 
 const router = express.Router();
 
+function generateBackupCodesRaw(count = 10) {
+  // Generate codes like: ABCD-EFGH (8 chars split for readability)
+  return Array.from({ length: count }).map(() => {
+    const raw = crypto.randomBytes(4).toString("hex").toUpperCase(); // 8 chars
+    return `${raw.slice(0, 4)}-${raw.slice(4)}`;
+  });
+}
+
 /**
  * POST /api/mfa/setup
  * Requires user to be logged in (JWT cookie).
@@ -86,9 +94,26 @@ router.post("/verify", requireAuth, async (req, res) => {
     }
 
     user.mfaEnabled = true;
+
+    // Issue backup codes ONCE at MFA enable-time
+    // (Only if they don't already exist)
+    let backupCodes = null;
+
+    if (!Array.isArray(user.backupCodeHashes) || user.backupCodeHashes.length === 0) {
+      const rawCodes = generateBackupCodesRaw(10);
+      const hashes = await Promise.all(rawCodes.map((c) => bcrypt.hash(c, 10)));
+
+      user.backupCodeHashes = hashes;
+      backupCodes = rawCodes;
+    }
+
     await user.save();
 
-    return res.json({ message: "MFA enabled successfully." });
+    return res.json({
+      message: "MFA enabled successfully. Save your backup codes الآن — you won’t be able to view them again.",
+      backupCodes, // null if already existed
+    });
+
   } catch (err) {
     console.error("MFA verify error:", err);
     return res.status(500).json({ message: "Server error" });
