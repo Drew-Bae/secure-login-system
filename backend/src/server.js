@@ -9,6 +9,7 @@ const authRoutes = require("./routes/authRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const { authLimiter } = require("./middleware/rateLimit");
 const mfaRoutes = require("./routes/mfaRoutes");
+const deviceRoutes = require("./routes/deviceRoutes");
 
 const app = express();
 
@@ -49,6 +50,7 @@ app.use("/api/auth", authLimiter);
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/mfa", mfaRoutes);
+app.use("/api/devices", deviceRoutes);
 
 connectDB();
 app.listen(PORT, "0.0.0.0", () =>
