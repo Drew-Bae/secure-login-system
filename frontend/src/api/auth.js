@@ -84,3 +84,13 @@ export function fetchMe() {
 export function fetchLoginHistory() {
   return api.get("/auth/login-history");
 }
+
+// GET /devices
+export function fetchDevices() {
+  return api.get("/devices");
+}
+
+// POST /devices/deviceId/trust
+export function trustDevice(deviceId) {
+  return api.post(`/devices/${deviceId}/trust`);
+}
