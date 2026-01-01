@@ -137,3 +137,8 @@ export function fetchDevices() {
 export function trustDevice(deviceId) {
   return api.post(`/devices/${deviceId}/trust`);
 }
+
+// Expose for UI features (Trust this device, highlighting current device)
+export function getCurrentDeviceId() {
+  return getDeviceId();
+}
