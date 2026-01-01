@@ -130,7 +130,7 @@ export default function MfaSetup() {
         <div style={{ marginTop: 16 }}>
           <h3 style={{ marginBottom: 8 }}>Your Backup Codes</h3>
           <p style={{ color: "#b45309", marginTop: 0 }}>
-            Save these الآن. For security, they will not be shown again.
+            Save these backup codes. For security, they will not be shown again.
           </p>
 
           <div
