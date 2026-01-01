@@ -120,39 +120,4 @@ router.post("/verify", requireAuth, async (req, res) => {
   }
 });
 
-/**
- * POST /api/mfa/backup-codes/generate
- * Requires user to be logged in.
- * Generates 10 one-time backup codes, stores only bcrypt hashes,
- * returns raw codes ONCE (client must display/save them).
- */
-router.post("/backup-codes/generate", requireAuth, async (req, res) => {
-  try {
-    const user = req.user;
-
-    if (!user.mfaEnabled) {
-      return res.status(400).json({ message: "Enable MFA before generating backup codes." });
-    }
-
-    // Generate 10 codes like: ABCD-EFGH (easy to read/type)
-    const rawCodes = Array.from({ length: 10 }).map(() => {
-      const raw = crypto.randomBytes(4).toString("hex").toUpperCase(); // 8 chars
-      return `${raw.slice(0, 4)}-${raw.slice(4)}`;
-    });
-
-    const hashes = await Promise.all(rawCodes.map((c) => bcrypt.hash(c, 10)));
-
-    user.backupCodeHashes = hashes;
-    await user.save();
-
-    return res.json({
-      message: "Backup codes generated. Save them now — you won’t be able to view them again.",
-      backupCodes: rawCodes,
-    });
-  } catch (err) {
-    console.error("Backup code generate error:", err);
-    return res.status(500).json({ message: "Server error" });
-  }
-});
-
 module.exports = router;
