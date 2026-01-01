@@ -4,6 +4,7 @@ const QRCode = require("qrcode");
 const { requireAuth } = require("../middleware/authMiddleware");
 const crypto = require("crypto");
 const bcrypt = require("bcrypt");
+const { encrypt, decrypt } = require("../utils/crypto");
 
 const router = express.Router();
 
@@ -29,8 +30,7 @@ router.post("/setup", requireAuth, async (req, res) => {
       length: 20,
     });
 
-    // Store base32 secret temporarily (until verified)
-    user.mfaSecret = secret.base32;
+    user.mfaSecretEncrypted = encrypt(secret.base32);
     await user.save();
 
     // Generate QR code (data URL)
@@ -62,7 +62,7 @@ router.post("/verify", requireAuth, async (req, res) => {
       return res.status(400).json({ message: "MFA code is required." });
     }
 
-    if (!user.mfaSecret) {
+    if (!user.mfaSecretEncrypted) {
       return res.status(400).json({
         message: "MFA setup not found. Please run setup again.",
       });
@@ -72,11 +72,13 @@ router.post("/verify", requireAuth, async (req, res) => {
       return res.status(400).json({ message: "MFA is already enabled." });
     }
 
+    const decryptedSecret = decrypt(user.mfaSecretEncrypted);
+
     const ok = speakeasy.totp.verify({
-      secret: user.mfaSecret,
+      secret: decryptedSecret,
       encoding: "base32",
       token: String(code).replace(/\s/g, ""),
-      window: 1, // allow slight clock drift
+      window: 1,
     });
 
     if (!ok) {

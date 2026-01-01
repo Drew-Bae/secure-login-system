@@ -12,6 +12,7 @@ const { requireAuth } = require("../middleware/authMiddleware");
 const geoip = require("geoip-lite");
 const TrustedDevice = require("../models/TrustedDevice");
 const { csrfIssue } = require("../middleware/csrf");
+const { decrypt } = require("../utils/crypto");
 
 
 // helper to create JWT
@@ -513,7 +514,7 @@ router.post("/mfa-login", async (req, res) => {
 
     // 1) Try TOTP first
     const totpOk = speakeasy.totp.verify({
-      secret: user.mfaSecret,
+      secret: decrypt(user.mfaSecretEncrypted),
       encoding: "base32",
       token: cleaned,
       window: 1,
