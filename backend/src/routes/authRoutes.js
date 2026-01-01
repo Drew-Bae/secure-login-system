@@ -573,7 +573,14 @@ router.post("/mfa-login", async (req, res) => {
 
 // LOGOUT
 router.post("/logout", (req, res) => {
-  res.clearCookie("token");
+  // NOTE: For cross-site cookies (SameSite=None; Secure), you must clear with matching options
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
+    path: "/",
+  });
+
   return res.json({ message: "Logged out" });
 });
 
