@@ -1,6 +1,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { fetchMe, loginUser, logoutUser } from "../api/auth";
 
+const LAST_LOGIN_META_KEY = "sls_last_login_meta";
+
+function setLastLoginMeta(meta) {
+  if (!meta) return;
+  sessionStorage.setItem(LAST_LOGIN_META_KEY, JSON.stringify(meta));
+}
+
 const AuthContext = createContext(null);
 
 /**
@@ -30,6 +37,14 @@ export function AuthProvider({ children }) {
   const login = useCallback(
     async ({ email, password }) => {
       const res = await loginUser({ email, password });
+
+      // Save login outcome metadata for the Security page UI
+      setLastLoginMeta({
+        at: Date.now(),
+        riskScore: res.data?.riskScore,
+        highRisk: res.data?.highRisk,
+        reasons: res.data?.reasons || [],
+      });
 
       // If MFA step-up required, do NOT call /me yet
       if (res.data?.mfaRequired) return res;
