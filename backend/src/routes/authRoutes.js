@@ -15,9 +15,17 @@ const { csrfIssue } = require("../middleware/csrf");
 const { decrypt } = require("../utils/crypto");
 
 
-// helper to create JWT
-function createToken(userId) {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: "7d" });
+// helper to create JWT (session token)
+function createToken(user) {
+  return jwt.sign(
+    {
+      userId: user._id?.toString?.() || user.userId || user.id,
+      role: user.role,
+      tokenVersion: user.tokenVersion || 0,
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: "7d" }
+  );
 }
 
 // helper to create PREAUTH_JWT
@@ -476,7 +484,7 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    const token = createToken(user._id);
+    const token = createToken(user);
 
     res.cookie("token", token, {
       httpOnly: true,
@@ -565,7 +573,7 @@ router.post("/mfa-login", async (req, res) => {
     }
 
     // Issue the real auth token
-    const token = createToken(user._id);
+    const token = createToken(user);
 
     res.cookie("token", token, {
       httpOnly: true,
