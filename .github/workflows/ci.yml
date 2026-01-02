@@ -35,6 +35,8 @@ jobs:
           JWT_SECRET: test_jwt_secret
           PREAUTH_JWT_SECRET: test_preauth_secret
           CLIENT_URL: http://localhost:3000
+          RESEND_API_KEY: re_test_key
+          EMAIL_FROM: test@example.com
         run: npm test
 
   frontend-build:
