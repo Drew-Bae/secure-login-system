@@ -11,6 +11,7 @@ import Security from "./pages/Security";
 import Devices from "./pages/Devices";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
+import AdminRoute from "./components/AdminRoute";
 
 export default function App() {
   return (
@@ -54,9 +55,9 @@ export default function App() {
           <Route
             path="/admin/login-attempts"
             element={
-              <ProtectedRoute>
+              <AdminRoute>
                 <AdminLoginAttempts />
-              </ProtectedRoute>
+              </AdminRoute>
             }
           />
         </Routes>
