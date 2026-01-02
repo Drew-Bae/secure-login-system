@@ -1,11 +1,50 @@
-import { useEffect, useState } from "react";
-import { fetchMe, fetchLoginHistory } from "../api/auth";
+import { useEffect, useMemo, useState } from "react";
+import {
+  fetchMe,
+  fetchLoginHistory,
+  trustDevice,
+  getCurrentDeviceId,
+} from "../api/auth";
+
+const LAST_LOGIN_META_KEY = "sls_last_login_meta";
+
+function readLastLoginMeta() {
+  try {
+    const raw = sessionStorage.getItem(LAST_LOGIN_META_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
 
 export default function Security() {
   const [me, setMe] = useState(null);
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null);
+
+  const [actionStatus, setActionStatus] = useState(null);
+
+  const lastLoginMeta = useMemo(() => readLastLoginMeta(), []);
+
+  const currentDeviceId = useMemo(() => {
+    try {
+      return getCurrentDeviceId();
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const reasons = Array.isArray(lastLoginMeta?.reasons) ? lastLoginMeta.reasons : [];
+  const highRisk = Boolean(lastLoginMeta?.highRisk);
+  const riskScore =
+    typeof lastLoginMeta?.riskScore === "number" ? lastLoginMeta.riskScore : null;
+
+  const deviceRelated =
+    reasons.includes("device_untrusted") || reasons.includes("new_device_for_account");
+
+  const ipRelated = reasons.includes("new_ip_for_account");
+  const travelRelated = reasons.includes("impossible_travel");
 
   async function load() {
     setLoading(true);
@@ -27,6 +66,28 @@ export default function Security() {
     }
   }
 
+  async function handleTrustThisDevice() {
+    setActionStatus(null);
+
+    if (!currentDeviceId) {
+      setActionStatus({ type: "error", message: "Could not determine this device ID." });
+      return;
+    }
+
+    try {
+      await trustDevice(currentDeviceId);
+      setActionStatus({
+        type: "success",
+        message: "This device is now trusted. Future logins from it should look less risky.",
+      });
+      // Refresh activity list (optional but feels good)
+      await load();
+    } catch (err) {
+      const msg = err.response?.data?.message || "Failed to trust this device.";
+      setActionStatus({ type: "error", message: msg });
+    }
+  }
+
   useEffect(() => {
     load();
   }, []);
@@ -35,6 +96,74 @@ export default function Security() {
     <div style={{ padding: 24, fontFamily: "system-ui" }}>
       <h1>Security</h1>
       <p>View your recent login activity and security settings.</p>
+
+      {/* Risk-based banner (based on the last login response) */}
+      {lastLoginMeta && (highRisk || reasons.length > 0) && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: 12,
+            border: "1px solid #ddd",
+            borderRadius: 10,
+            background: highRisk ? "#fff7ed" : "#f8fafc",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+            <div>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                {highRisk ? "⚠️ High-risk login detected" : "Login security signals detected"}
+              </div>
+
+              <div style={{ opacity: 0.9, fontSize: 14 }}>
+                {riskScore !== null && (
+                  <span>
+                    Risk score: <strong>{riskScore}</strong>.{" "}
+                  </span>
+                )}
+                {deviceRelated && <span>New or untrusted device. </span>}
+                {ipRelated && <span>New IP address. </span>}
+                {travelRelated && <span>Possible “impossible travel”. </span>}
+                {!deviceRelated && !ipRelated && !travelRelated && reasons.length > 0 && (
+                  <span>Signals: {reasons.join(", ")}.</span>
+                )}
+              </div>
+
+              <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                {deviceRelated && (
+                  <button
+                    type="button"
+                    onClick={handleTrustThisDevice}
+                    style={{ padding: "6px 12px" }}
+                  >
+                    Trust this device
+                  </button>
+                )}
+
+                {me && !me.mfaEnabled && (
+                  <a href="/mfa/setup" style={{ display: "inline-block", padding: "6px 12px" }}>
+                    Enable MFA
+                  </a>
+                )}
+
+                <a href="/devices" style={{ display: "inline-block", padding: "6px 12px" }}>
+                  Review devices
+                </a>
+              </div>
+
+              {actionStatus && (
+                <div
+                  style={{
+                    marginTop: 10,
+                    color: actionStatus.type === "error" ? "crimson" : "green",
+                  }}
+                >
+                  {actionStatus.message}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <button
         type="button"
@@ -45,17 +174,21 @@ export default function Security() {
         {loading ? "Refreshing..." : "Refresh"}
       </button>
 
-      {status && (
-        <p style={{ color: "crimson", marginTop: 8 }}>{status.message}</p>
-      )}
+      {status && <p style={{ color: "crimson", marginTop: 8 }}>{status.message}</p>}
 
       {me && (
         <div style={{ marginTop: 12, marginBottom: 16 }}>
           <h3 style={{ marginBottom: 8 }}>Account</h3>
           <ul style={{ margin: 0, paddingLeft: 18 }}>
-            <li><strong>Email:</strong> {me.email}</li>
-            <li><strong>Role:</strong> {me.role}</li>
-            <li><strong>MFA Enabled:</strong> {me.mfaEnabled ? "Yes" : "No"}</li>
+            <li>
+              <strong>Email:</strong> {me.email}
+            </li>
+            <li>
+              <strong>Role:</strong> {me.role}
+            </li>
+            <li>
+              <strong>MFA Enabled:</strong> {me.mfaEnabled ? "Yes" : "No"}
+            </li>
           </ul>
         </div>
       )}
@@ -66,13 +199,7 @@ export default function Security() {
         <p>No login attempts to display.</p>
       ) : (
         <div style={{ overflowX: "auto", marginTop: 8 }}>
-          <table
-            style={{
-              borderCollapse: "collapse",
-              minWidth: 800,
-              fontSize: 14,
-            }}
-          >
+          <table style={{ borderCollapse: "collapse", minWidth: 800, fontSize: 14 }}>
             <thead>
               <tr>
                 <th style={thStyle}>Time</th>
@@ -92,17 +219,15 @@ export default function Security() {
                   <td style={tdStyle}>{new Date(a.createdAt).toLocaleString()}</td>
                   <td style={tdStyle}>{a.success ? "✅" : "❌"}</td>
                   <td style={tdStyle}>{a.suspicious ? "⚠️ Yes" : "No"}</td>
+                  <td style={tdStyle}>{typeof a.riskScore === "number" ? a.riskScore : "-"}</td>
                   <td style={tdStyle}>
-                    {typeof a.riskScore === "number" ? a.riskScore : "-"}
-                  </td>
-                  <td style={tdStyle}>
-                    {Array.isArray(a.reasons) && a.reasons.length > 0
-                      ? a.reasons.join(", ")
-                      : "-"}
+                    {Array.isArray(a.reasons) && a.reasons.length > 0 ? a.reasons.join(", ") : "-"}
                   </td>
                   <td style={tdStyle}>{a.ip || "-"}</td>
                   <td style={tdStyle}>
-                    {a.geo?.country ? `${a.geo.country}${a.geo.city ? " / " + a.geo.city : ""}` : "-"}
+                    {a.geo?.country
+                      ? `${a.geo.country}${a.geo.city ? " / " + a.geo.city : ""}`
+                      : "-"}
                   </td>
                   <td style={tdStyle}>
                     {a.deviceId && a.deviceId !== "unknown" ? a.deviceId.slice(0, 8) : "-"}
