@@ -12,6 +12,7 @@ const loginAttemptSchema = new mongoose.Schema(
     reasons: [{ type: String }],
     
     riskScore: { type: Number, default: 0 },
+    rawRiskScore: { type: Number, default: 0 },
 
     geo: {
       country: { type: String },
