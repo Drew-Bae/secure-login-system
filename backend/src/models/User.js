@@ -14,7 +14,7 @@ const userSchema = new mongoose.Schema(
       required: true,
       minlength: 6,
     },
-    
+    tokenVersion: { type: Number, default: 0 },
     failedLoginCount: { type: Number, default: 0 },
     lockoutUntil: { type: Date },
     mfaEnabled: { type: Boolean, default: false },
