@@ -238,6 +238,7 @@ router.post("/login", async (req, res) => {
         suspicious: false,
         reasons,
         riskScore,
+        rawRiskScore,
         geo: geoObj,
       });
 
@@ -259,6 +260,7 @@ router.post("/login", async (req, res) => {
         suspicious: true,
         reasons: suspiciousReasons,
         riskScore,
+        rawRiskScore,
         geo: geoObj,
       });
 
@@ -399,13 +401,16 @@ router.post("/login", async (req, res) => {
       await user.save();
     }
 
-    // Compute risk once from "signal" reasons only (exclude label reasons)
-    let riskScore = computeRiskScore({
+    // Compute raw risk from signal reasons only (exclude label reasons)
+    const rawRiskScore = computeRiskScore({
       success,
       reasons: suspiciousReasons.filter((r) => r !== "high_risk_login"),
     });
 
-    // New account cap (extra safety even after reason suppression)
+    // Policy risk score (can be capped for new accounts)
+    let riskScore = rawRiskScore;
+
+    // New account cap (prevents early false positives from causing warn/block)
     if (isNewAccount) {
       riskScore = Math.min(riskScore, NEW_ACCOUNT_RISK_CAP);
     }
@@ -418,8 +423,13 @@ router.post("/login", async (req, res) => {
       suspiciousReasons.push("high_risk_login");
     }
 
-    // Suspicious should be tied to risk, not "any reason exists"
-    const suspicious = riskScore >= RISK_WARN_THRESHOLD;
+    // Suspicious is an admin/audit label: use raw signals (or strong reasons)
+    // This makes "impossible_travel" show up even if the policy score is capped.
+    const suspicious =
+      rawRiskScore >= RISK_WARN_THRESHOLD ||
+      suspiciousReasons.includes("impossible_travel") ||
+      suspiciousReasons.includes("lockout_triggered") ||
+      suspiciousReasons.includes("account_locked");
 
     // Log attempt
     await LoginAttempt.create({
@@ -430,7 +440,8 @@ router.post("/login", async (req, res) => {
       success,
       suspicious,
       reasons: suspiciousReasons,
-      riskScore,
+      riskScore,      // capped policy score
+      rawRiskScore,   // uncapped signal score
       geo: geoObj,
     });
 
