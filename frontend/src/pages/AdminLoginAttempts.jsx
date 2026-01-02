@@ -100,6 +100,7 @@ export default function AdminLoginAttempts() {
                 <th style={thStyle}>Success</th>
                 <th style={thStyle}>Suspicious</th>
                 <th style={thStyle}>Risk</th>
+                <th style={thStyle}>Raw Risk</th>
                 <th style={thStyle}>Reasons</th>
               </tr>
             </thead>
@@ -139,6 +140,9 @@ export default function AdminLoginAttempts() {
                   </td>
                   <td style={tdStyle}>
                     {typeof a.riskScore === "number" ? a.riskScore : "-"}
+                  </td>
+                  <td style={tdStyle}>
+                    {typeof a.rawRiskScore === "number" ? a.rawRiskScore : "-"}
                   </td>
                   <td style={tdStyle}>
                     {Array.isArray(a.reasons) && a.reasons.length > 0
