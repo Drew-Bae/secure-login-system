@@ -139,3 +139,8 @@ export function trustDevice(deviceId) {
 export function getCurrentDeviceId() {
   return getDeviceId();
 }
+
+// POST /auth/logout-all
+export function logoutAllDevices() {
+  return api.post("/auth/logout-all");
+}
