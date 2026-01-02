@@ -1,17 +1,42 @@
-const { Resend } = require("resend");
-
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 function cleanEmail(v) {
   return String(v || "")
     .trim()
     .replace(/^['"]+|['"]+$/g, "");
 }
 
+let resendClient = null;
+
+function getResendClient() {
+  // Never send real emails during tests
+  if (process.env.NODE_ENV === "test") return null;
+
+  // If env vars aren't configured, we'll fall back to console logging in sendPasswordResetEmail
+  if (!process.env.RESEND_API_KEY) return null;
+
+  if (!resendClient) {
+    const { Resend } = require("resend");
+    resendClient = new Resend(process.env.RESEND_API_KEY);
+  }
+
+  return resendClient;
+}
+
 async function sendPasswordResetEmail({ to, resetUrl }) {
+  // In tests: do nothing and don't throw
+  if (process.env.NODE_ENV === "test") {
+    return { skipped: true };
+  }
+
+  // If not configured, keep your current dev behavior
   if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) {
     console.log(`[DEV] Password reset link for ${to}: ${resetUrl}`);
-    return;
+    return { skipped: true };
+  }
+
+  const resend = getResendClient();
+  if (!resend) {
+    console.log(`[DEV] Password reset link for ${to}: ${resetUrl}`);
+    return { skipped: true };
   }
 
   const fromEmail = cleanEmail(process.env.EMAIL_FROM);
@@ -46,6 +71,8 @@ async function sendPasswordResetEmail({ to, resetUrl }) {
         </div>
       `,
     });
+
+    return { sent: true };
   } catch (err) {
     console.error("Resend email error:", err);
     throw err;
