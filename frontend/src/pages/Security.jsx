@@ -4,6 +4,7 @@ import {
   fetchLoginHistory,
   trustDevice,
   getCurrentDeviceId,
+  logoutAllDevices,
 } from "../api/auth";
 
 const LAST_LOGIN_META_KEY = "sls_last_login_meta";
@@ -87,6 +88,20 @@ export default function Security() {
       setActionStatus({ type: "error", message: msg });
     }
   }
+
+  async function handleLogoutAllDevices() {
+    setActionStatus(null);
+
+    try {
+      await logoutAllDevices();
+      // token cookie is cleared, plus server revokes all sessions
+      window.location.href = "/login";
+    } catch (err) {
+      const msg = err.response?.data?.message || "Failed to log out of all devices.";
+      setActionStatus({ type: "error", message: msg });
+    }
+  }
+
 
   useEffect(() => {
     load();
@@ -190,6 +205,15 @@ export default function Security() {
               <strong>MFA Enabled:</strong> {me.mfaEnabled ? "Yes" : "No"}
             </li>
           </ul>
+          <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={handleLogoutAllDevices}
+              style={{ padding: "6px 12px" }}
+            >
+              Log out of all devices
+            </button>
+          </div>
         </div>
       )}
 
