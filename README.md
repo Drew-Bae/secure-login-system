@@ -1,5 +1,7 @@
 # Secure Login System (SLS)
 
+![CI](https://github.com/<YOUR_USERNAME>/<YOUR_REPO>/actions/workflows/ci.yml/badge.svg)
+
 A portfolio-grade secure authentication platform built to demonstrate real-world security controls and detection techniques.  
 This project starts with a fully working login system and progressively adds advanced defenses like MFA, suspicious login detection, and an admin security console.
 
