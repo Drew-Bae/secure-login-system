@@ -603,6 +603,25 @@ router.post("/logout", (req, res) => {
   return res.json({ message: "Logged out" });
 });
 
+// GLOBAL LOGOUT
+router.post("/logout-all", requireAuth, async (req, res) => {
+  const user = await User.findById(req.user.id);
+  if (!user) return res.status(404).json({ message: "User not found" });
+
+  user.tokenVersion = (user.tokenVersion || 0) + 1;
+  await user.save();
+
+  // Also clear this browser's cookie immediately
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
+    path: "/",
+  });
+
+  return res.json({ message: "Logged out of all devices" });
+});
+
 // ME
 router.get("/me", requireAuth, async (req, res) => {
   const user = req.user;
