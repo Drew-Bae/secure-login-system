@@ -1,9 +1,6 @@
-import axios from "axios";
+import client from "./client";
 
-const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || "/api",
-  withCredentials: true,
-});
+const api = client;
 
 /**
  * ---- Device ID header (keep as-is) ----
