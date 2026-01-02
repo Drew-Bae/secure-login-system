@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { fetchDevices, trustDevice } from "../api/auth";
+import { fetchDevices, trustDevice, getCurrentDeviceId } from "../api/auth";
 
 export default function Devices() {
   const [devices, setDevices] = useState([]);
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
+  const currentDeviceId = getCurrentDeviceId();
 
   async function load() {
     setLoading(true);
@@ -65,7 +66,18 @@ export default function Devices() {
           <tbody>
             {devices.map((d) => (
               <tr key={d._id}>
-                <td style={td}>{d.deviceId ? d.deviceId.slice(0, 8) : "-"}</td>
+                <td style={td}>
+                  {d.deviceId ? (
+                    <>
+                      {d.deviceId.slice(0, 8)}
+                      {currentDeviceId === d.deviceId ? (
+                        <span style={{ marginLeft: 8, opacity: 0.7 }}>(this device)</span>
+                      ) : null}
+                    </>
+                  ) : (
+                    "-"
+                  )}
+                </td>
                 <td style={td}>{d.trusted ? "✅" : "❌"}</td>
                 <td style={td}>{d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : "-"}</td>
                 <td style={td}>
