@@ -34,7 +34,7 @@ export default function StepUpVerify() {
       }
     }
     run();
-  }, [token, preAuthToken, navigate]);
+  }, [token, preAuthToken, navigate, refreshMe]);
 
   return (
     <div style={{ maxWidth: 560, margin: "40px auto", padding: 16 }}>
