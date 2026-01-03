@@ -6,7 +6,7 @@ const LoginAttempt = require("../models/LoginAttempt");
 const router = express.Router();
 const isProduction = process.env.NODE_ENV === "production";
 const crypto = require("crypto");
-const { sendPasswordResetEmail } = require("../services/emailService");
+const { sendPasswordResetEmail, sendStepUpEmail } = require("../services/emailService");
 const speakeasy = require("speakeasy");
 const { requireAuth } = require("../middleware/authMiddleware");
 const geoip = require("geoip-lite");
@@ -17,6 +17,8 @@ const { authCookieOptions } = require("../config/cookies");
 const { loginLimiter, mfaLimiter } = require("../middleware/rateLimiters");
 const { sleep } = require("../utils/sleep");
 const { loginAttemptTracker } = require("../middleware/loginAttemptTracker");
+const StepUpChallenge = require("../models/StepUpChallenge");
+const { generateToken, hashToken } = require("../utils/stepUpTokens");
 
 // helper to create JWT (session token)
 function createToken({ user, deviceId, deviceTokenVersion }) {
@@ -555,6 +557,117 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
   } catch (err) {
     console.error("Login error:", err);
     return res.status(500).json({ message: "Server error" });
+  }
+});
+
+// STEPUP-EMAIL
+router.post("/stepup-email", async (req, res) => {
+  try {
+    const { preAuthToken, risk } = req.body || {};
+    if (!preAuthToken) return res.status(400).json({ message: "Missing preAuthToken" });
+
+    const payload = jwt.verify(preAuthToken, process.env.PREAUTH_JWT_SECRET);
+    if (payload.type !== "preauth") return res.status(400).json({ message: "Invalid preAuthToken" });
+
+    const user = await User.findById(payload.userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const rawIp = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip;
+    const ip = rawIp?.startsWith("::ffff:") ? rawIp.replace("::ffff:", "") : rawIp;
+    const userAgent = req.headers["user-agent"] || "unknown";
+    const deviceId = req.headers["x-device-id"] || "unknown";
+
+    const token = generateToken();
+    const tokenHash = hashToken(token);
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await StepUpChallenge.create({
+      userId: user._id,
+      tokenHash,
+      expiresAt,
+      ip,
+      userAgent,
+      deviceId,
+      riskLabel: risk?.label,
+      reasons: risk?.reasons || [],
+    });
+
+    const clientBase = process.env.CLIENT_URL || "http://localhost:3000";
+    const verifyUrl = `${clientBase}/step-up/verify?token=${token}&preAuthToken=${encodeURIComponent(preAuthToken)}`;
+
+    try {
+      await sendStepUpEmail({ to: user.email, verifyUrl });
+    } catch (e) {
+      console.error("sendStepUpEmail failed:", e);
+    }
+
+    return res.json({ message: "Verification email sent" });
+  } catch (err) {
+    console.error("stepup-email error:", err);
+    return res.status(400).json({ message: "Invalid request" });
+  }
+});
+
+// VERIFY STEPUP
+router.post("/verify-stepup", async (req, res) => {
+  try {
+    const { token, preAuthToken } = req.body || {};
+    if (!token || !preAuthToken) return res.status(400).json({ message: "Missing token" });
+
+    const payload = jwt.verify(preAuthToken, process.env.PREAUTH_JWT_SECRET);
+    if (payload.type !== "preauth") return res.status(400).json({ message: "Invalid preAuthToken" });
+
+    const user = await User.findById(payload.userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const rawIp = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip;
+    const ip = rawIp?.startsWith("::ffff:") ? rawIp.replace("::ffff:", "") : rawIp;
+    const userAgent = req.headers["user-agent"] || "unknown";
+    const deviceId = req.headers["x-device-id"] || "unknown";
+
+    const tokenHash = hashToken(token);
+
+    const challenge = await StepUpChallenge.findOne({
+      userId: user._id,
+      tokenHash,
+      usedAt: { $exists: false },
+      expiresAt: { $gt: new Date() },
+    });
+
+    if (!challenge) return res.status(400).json({ message: "Invalid or expired token" });
+
+    // Bind check: enforce device match when possible (IP can change on mobile/VPN)
+    if (challenge.deviceId && challenge.deviceId !== "unknown" && challenge.deviceId !== deviceId) {
+      return res.status(400).json({ message: "Challenge device mismatch" });
+    }
+
+    challenge.usedAt = new Date();
+    await challenge.save();
+
+    // Ensure device isn't compromised + get tokenVersion for device-bound JWT
+    let deviceDoc = null;
+    if (deviceId !== "unknown") {
+      deviceDoc = await TrustedDevice.findOne({ userId: user._id, deviceId }).select(
+        "tokenVersion compromisedAt"
+      );
+      if (deviceDoc?.compromisedAt) {
+        return res.status(401).json({ message: "Device is compromised" });
+      }
+    }
+
+    // IMPORTANT: use your *current* createToken signature.
+    // If your createToken expects an object { user, deviceId, deviceTokenVersion }, use that.
+    const jwtToken = createToken({
+      user,
+      deviceId,
+      deviceTokenVersion: deviceDoc?.tokenVersion || 0,
+    });
+
+    res.cookie("token", jwtToken, authCookieOptions());
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("verify-stepup error:", err);
+    return res.status(400).json({ message: "Invalid request" });
   }
 });
 
