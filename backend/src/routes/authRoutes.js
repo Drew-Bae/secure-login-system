@@ -15,7 +15,7 @@ const { csrfIssue } = require("../middleware/csrf");
 const { decrypt } = require("../utils/crypto");
 const { authCookieOptions } = require("../config/cookies");
 const { loginLimiter, mfaLimiter } = require("../middleware/rateLimiters");
-
+const { sleep } = require("../utils/sleep");
 
 // helper to create JWT (session token)
 function createToken({ user, deviceId, deviceTokenVersion }) {
@@ -92,6 +92,16 @@ function haversineMiles(lat1, lon1, lat2, lon2) {
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
+}
+
+const isTest = process.env.NODE_ENV === "test";
+
+function calcDelayMs(fails) {
+  // 250, 500, 1000, 2000, 4000 (capped) + jitter
+  const base = 250;
+  const pow = Math.min(4, Math.max(0, fails || 0));
+  const jitter = Math.floor(Math.random() * 120);
+  return Math.min(4000, base * (2 ** pow) + jitter);
 }
 
 // GET /api/auth/csrf
@@ -239,10 +249,12 @@ router.post("/login", loginLimiter, async (req, res) => {
 
     // Always keep responses generic
     if (!user) {
+      if (!isTest) await sleep(300 + Math.floor(Math.random() * 120));
+
       const reasons = [];
+      const rawRiskScore = 0;
       const riskScore = computeRiskScore({ success: false, reasons });
 
-      // still log attempt (unknown user)
       await LoginAttempt.create({
         email,
         ip,
@@ -259,11 +271,13 @@ router.post("/login", loginLimiter, async (req, res) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
+
     // Check lockout
     const now = new Date();
     if (user.lockoutUntil && user.lockoutUntil > now) {
       const suspiciousReasons = ["account_locked"];
-      const riskScore = computeRiskScore({ success: false, reasons: suspiciousReasons });
+      const rawRiskScore = computeRiskScore({ success: false, reasons: suspiciousReasons });
+      const riskScore = rawRiskScore;
 
       await LoginAttempt.create({
         email,
@@ -279,7 +293,7 @@ router.post("/login", loginLimiter, async (req, res) => {
       });
 
       return res.status(429).json({
-        message: "Account temporarily locked. Please try again later.",
+        message: "Too many attempts. Please try again later.",
       });
     }
 
@@ -460,6 +474,9 @@ router.post("/login", loginLimiter, async (req, res) => {
     });
 
     if (!success) {
+      if (!isTest) {
+        await sleep(calcDelayMs(user.failedLoginCount || 0));
+      }
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
