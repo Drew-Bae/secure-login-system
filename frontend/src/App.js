@@ -12,6 +12,7 @@ import Devices from "./pages/Devices";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminRoute from "./components/AdminRoute";
+import StepUpVerify from "./pages/StepUpVerify";
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/mfa-verify" element={<MfaVerify />} />
+          <Route path="/step-up/verify" element={<StepUpVerify />} />
 
           {/* Authenticated routes */}
           <Route
