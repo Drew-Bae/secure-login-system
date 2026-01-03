@@ -40,17 +40,19 @@ export default function Login() {
 
       // Email step-up required (high-risk without MFA)
       if (res.data?.stepUpRequired && res.data?.stepUpMethod === "email") {
-        // trigger email immediately
+        sessionStorage.setItem("preAuthToken", res.data.preAuthToken);
+
+        // Trigger email
+        const { sendStepUpEmail } = await import("../api/auth");
         await sendStepUpEmail(res.data.preAuthToken, res.data.risk);
 
-        // show message and tell user to check email
         setStatus({
-          type: "info",
+          type: "success",
           message: "Check your email to verify this login. The link expires in 10 minutes.",
         });
+        setPassword("");
         return;
       }
-
 
       // Normal success (with optional high-risk warning)
       if (res.data?.highRisk) {
