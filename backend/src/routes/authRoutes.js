@@ -14,6 +14,7 @@ const TrustedDevice = require("../models/TrustedDevice");
 const { csrfIssue } = require("../middleware/csrf");
 const { decrypt } = require("../utils/crypto");
 const { authCookieOptions } = require("../config/cookies");
+const { loginLimiter, mfaLimiter } = require("../middleware/rateLimiters");
 
 
 // helper to create JWT (session token)
@@ -211,7 +212,7 @@ router.post("/reset-password", async (req, res) => {
 });
 
 // LOGIN
-router.post("/login", async (req, res) => {
+router.post("/login", loginLimiter, async (req, res) => {
   const { email, password } = req.body;
 
   const rawIp = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip;
@@ -511,7 +512,7 @@ router.post("/login", async (req, res) => {
 });
 
 // MFA LOGIN
-router.post("/mfa-login", async (req, res) => {
+router.post("/mfa-login", mfaLimiter, async (req, res) => {
   try {
     const { preAuthToken, code } = req.body;
 
