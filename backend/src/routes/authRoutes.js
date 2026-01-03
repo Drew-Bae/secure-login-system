@@ -534,6 +534,30 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
       });
     }
 
+    // ✅ Email step-up when risky and MFA is NOT enabled
+    // (Don't issue the auth cookie yet)
+    if (!user.mfaEnabled && success && highRisk && !blockRisk) {
+      const preAuthToken = createPreAuthToken(user._id);
+
+      return res.status(200).json({
+        stepUpRequired: true,
+        stepUpMethod: "email",
+        preAuthToken,
+
+        // keep existing fields for consistency / UI
+        riskScore,
+        highRisk,
+        reasons: suspiciousReasons,
+
+        // optional structured object your UI already passes to sendStepUpEmail
+        risk: {
+          label: "medium",
+          riskScore,
+          reasons: suspiciousReasons,
+        },
+      });
+    }
+
     // Risk-based policy when MFA is NOT enabled
     if (!user.mfaEnabled && success && blockRisk) {
       // Log attempt already recorded; do NOT issue JWT
