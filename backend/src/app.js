@@ -29,13 +29,31 @@ const allowedOrigins = (process.env.CLIENT_URLS || process.env.CLIENT_URL || "ht
   .map((s) => s.trim())
   .filter(Boolean);
 
+const allowVercelPreviews = process.env.ALLOW_VERCEL_PREVIEWS === "true";
+
+function isVercelPreviewOrigin(origin) {
+  // Examples:
+  // https://secure-login-system-gwg2om447-drewbaes-projects.vercel.app
+  // https://secure-login-system-somehash.vercel.app
+  if (!origin) return false;
+
+  return (
+    /^https:\/\/secure-login-system-[a-z0-9-]+\.vercel\.app$/.test(origin) ||
+    /^https:\/\/secure-login-system-[a-z0-9-]+-drewbaes-projects\.vercel\.app$/.test(origin)
+  );
+}
+
 app.use(
   cors({
     origin: function (origin, cb) {
       // allow non-browser tools (curl, Postman) with no origin
       if (!origin) return cb(null, true);
 
+      // exact allowlist
       if (allowedOrigins.includes(origin)) return cb(null, true);
+
+      // optional: allow Vercel preview deployments for this project
+      if (allowVercelPreviews && isVercelPreviewOrigin(origin)) return cb(null, true);
 
       return cb(new Error(`CORS blocked for origin: ${origin}`));
     },
