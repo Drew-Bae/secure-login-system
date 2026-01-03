@@ -79,4 +79,57 @@ async function sendPasswordResetEmail({ to, resetUrl }) {
   }
 }
 
-module.exports = { sendPasswordResetEmail };
+async function sendStepUpEmail({ to, verifyUrl }) {
+  // In tests: do nothing and don't throw
+  if (process.env.NODE_ENV === "test") {
+    return { skipped: true };
+  }
+
+  // If not configured, keep dev behavior
+  if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) {
+    console.log(`[DEV] Step-up verify link for ${to}: ${verifyUrl}`);
+    return { skipped: true };
+  }
+
+  const resend = getResendClient();
+  if (!resend) {
+    console.log(`[DEV] Step-up verify link for ${to}: ${verifyUrl}`);
+    return { skipped: true };
+  }
+
+  const fromEmail = cleanEmail(process.env.EMAIL_FROM);
+  const from = `Secure Login System <${fromEmail}>`;
+
+  await resend.emails.send({
+    from,
+    to,
+    subject: "Verify your login",
+    html: `
+      <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;">
+        <h2>Verify your login</h2>
+        <p>We detected a higher-risk login attempt. Please verify to continue.</p>
+        <p style="margin: 24px 0;">
+          <a href="${verifyUrl}" style="
+            background:#111;
+            color:#fff;
+            padding:10px 14px;
+            border-radius:8px;
+            text-decoration:none;
+            display:inline-block;
+          ">
+            Verify Login
+          </a>
+        </p>
+        <p>If the button doesn't work, copy and paste this link:</p>
+        <p><a href="${verifyUrl}">${verifyUrl}</a></p>
+        <p style="margin-top:24px;color:#666;">
+          This link expires in 10 minutes. If this wasn’t you, you can ignore this email.
+        </p>
+      </div>
+    `,
+  });
+
+  return { sent: true };
+}
+
+module.exports = { sendPasswordResetEmail, sendStepUpEmail };
