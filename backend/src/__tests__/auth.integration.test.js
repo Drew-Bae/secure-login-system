@@ -117,4 +117,50 @@ describe("Auth integration", () => {
 
     await adminAgent.get("/api/admin/login-attempts").expect(200);
   });
+
+  test("logout-all revokes other active sessions", async () => {
+    // Two separate browser sessions
+    const agentA = request.agent(app);
+    const agentB = request.agent(app);
+
+    // Register once using agentA
+    const csrfReg = await mintCsrf(agentA);
+    await agentA
+      .post("/api/auth/register")
+      .set("x-csrf-token", csrfReg)
+      .send({ email: "multi@test.com", password: "Password123!" })
+      .expect(201);
+
+    // Login on agentA
+    const csrfA1 = await mintCsrf(agentA);
+    await agentA
+      .post("/api/auth/login")
+      .set("x-csrf-token", csrfA1)
+      .set("x-device-id", "device-A")
+      .send({ email: "multi@test.com", password: "Password123!" })
+      .expect(200);
+
+    // Login on agentB
+    const csrfB1 = await mintCsrf(agentB);
+    await agentB
+      .post("/api/auth/login")
+      .set("x-csrf-token", csrfB1)
+      .set("x-device-id", "device-B")
+      .send({ email: "multi@test.com", password: "Password123!" })
+      .expect(200);
+
+    // Sanity: both are authenticated
+    await agentA.get("/api/auth/me").expect(200);
+    await agentB.get("/api/auth/me").expect(200);
+
+    // Agent A revokes all sessions (increments tokenVersion + clears its cookie)
+    const csrfA2 = await mintCsrf(agentA);
+    await agentA
+      .post("/api/auth/logout-all")
+      .set("x-csrf-token", csrfA2)
+      .expect(200);
+
+    // Agent B should now be rejected because its JWT has old tokenVersion
+    await agentB.get("/api/auth/me").expect(401);
+  });
 });
