@@ -491,6 +491,8 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
+    const riskLabel = blockRisk ? "high" : highRisk ? "medium" : "low";
+
     const stepUpRequired = shouldStepUp({ riskLabel, user });
 
     if (stepUpRequired) {
