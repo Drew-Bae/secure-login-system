@@ -252,8 +252,8 @@ router.post("/login", loginLimiter, async (req, res) => {
       if (!isTest) await sleep(300 + Math.floor(Math.random() * 120));
 
       const reasons = [];
-      const rawRiskScore = 0;
-      const riskScore = computeRiskScore({ success: false, reasons });
+      const rawRiskScore = computeRiskScore({ success: false, reasons });
+      const riskScore = rawRiskScore;
 
       await LoginAttempt.create({
         email,
