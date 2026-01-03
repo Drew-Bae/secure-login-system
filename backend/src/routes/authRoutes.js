@@ -105,6 +105,14 @@ function calcDelayMs(fails) {
   return Math.min(4000, base * (2 ** pow) + jitter);
 }
 
+function shouldStepUp({ riskLabel, user }) {
+  // riskLabel expected: "low" | "medium" | "high"
+  if (riskLabel !== "high") return false;
+  // If MFA is enabled, we can step-up via MFA.
+  // If not, we still step-up via email verification later.
+  return true;
+}
+
 // GET /api/auth/csrf
 router.get("/csrf", csrfIssue);
 
@@ -479,6 +487,27 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
         await sleep(calcDelayMs(user.failedLoginCount || 0));
       }
       return res.status(400).json({ message: "Invalid credentials" });
+    }
+
+    const stepUpRequired = shouldStepUp({ riskLabel, user });
+
+    if (stepUpRequired) {
+      // If MFA enabled -> return mfaRequired (you already support this)
+      if (user.mfaEnabled) {
+        const preAuthToken = createPreAuthToken(user._id);
+        return res.status(200).json({
+          mfaRequired: true,
+          preAuthToken,
+          risk: { label: riskLabel, reasons: suspiciousReasons },
+        });
+      }
+
+      // If no MFA: return stepUpRequired flag for email verification (next step)
+      return res.status(200).json({
+        stepUpRequired: true,
+        stepUpMethod: "email",
+        risk: { label: riskLabel, reasons: suspiciousReasons },
+      });
     }
 
     // If MFA enabled, require step-up verification
