@@ -16,12 +16,16 @@ const { decrypt } = require("../utils/crypto");
 
 
 // helper to create JWT (session token)
-function createToken(user) {
+function createToken({ user, deviceId, deviceTokenVersion }) {
   return jwt.sign(
     {
       userId: user._id?.toString?.() || user.userId || user.id,
       role: user.role,
       tokenVersion: user.tokenVersion || 0,
+
+      // device-bound session
+      deviceId: deviceId || "unknown",
+      deviceTokenVersion: deviceTokenVersion || 0,
     },
     process.env.JWT_SECRET,
     { expiresIn: "7d" }
@@ -320,18 +324,13 @@ router.post("/login", async (req, res) => {
     // device check
     // ---- DEVICE TRACKING & TRUST LOGIC ----
     let isNewDevice = false;
+    let deviceDoc = null;
 
     if (success && deviceId && deviceId !== "unknown") {
-      // Check if device existed BEFORE upsert
-      const existedBefore = await TrustedDevice.exists({
-        userId: user._id,
-        deviceId,
-      });
-
+      const existedBefore = await TrustedDevice.exists({ userId: user._id, deviceId });
       isNewDevice = !existedBefore;
 
-      // Upsert device (always update metadata)
-      await TrustedDevice.findOneAndUpdate(
+      deviceDoc = await TrustedDevice.findOneAndUpdate(
         { userId: user._id, deviceId },
         {
           $setOnInsert: {
@@ -339,6 +338,7 @@ router.post("/login", async (req, res) => {
             deviceId,
             firstSeenAt: new Date(),
             trusted: false,
+            tokenVersion: 0,
           },
           $set: {
             lastSeenAt: new Date(),
@@ -350,16 +350,20 @@ router.post("/login", async (req, res) => {
         { upsert: true, new: true }
       );
 
-      // Risk reasons
+      // If user marked device compromised, do not allow issuing a token for it
+      if (deviceDoc?.compromisedAt) {
+        return res.status(401).json({
+          message: "This device is marked compromised. Use another device or revoke it in Devices.",
+        });
+      }
+
       if (!isNewAccount) {
         if (isNewDevice) {
           suspiciousReasons.push("new_device_for_account");
           suspiciousReasons.push("device_untrusted");
         } else {
-          const known = await TrustedDevice.findOne({ userId: user._id, deviceId });
-          if (known && !known.trusted) {
-            suspiciousReasons.push("device_untrusted");
-          }
+          const known = deviceDoc; // reuse doc we already have
+          if (known && !known.trusted) suspiciousReasons.push("device_untrusted");
         }
       }
     }
@@ -484,7 +488,12 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    const token = createToken(user);
+    const token = createToken({
+      user,
+      deviceId,
+      deviceTokenVersion: deviceDoc?.tokenVersion || 0,
+    });
+
 
     res.cookie("token", token, {
       httpOnly: true,
@@ -527,6 +536,47 @@ router.post("/mfa-login", async (req, res) => {
     const user = await User.findById(payload.userId);
     if (!user || !user.mfaEnabled || !user.mfaSecretEncrypted) {
       return res.status(401).json({ message: "MFA not enabled for this account" });
+    }
+    
+    // --- device + metadata for device-bound token ---
+    const rawIp = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip;
+    const ip = rawIp?.startsWith("::ffff:") ? rawIp.replace("::ffff:", "") : rawIp;
+    const userAgent = req.headers["user-agent"] || "unknown";
+    const deviceId = req.headers["x-device-id"] || "unknown";
+
+    const geo = geoip.lookup(ip);
+    const geoObj = geo
+      ? { country: geo.country, region: geo.region, city: geo.city, ll: geo.ll }
+      : undefined;
+
+    let deviceDoc = null;
+
+    if (deviceId !== "unknown") {
+      deviceDoc = await TrustedDevice.findOneAndUpdate(
+        { userId: user._id, deviceId },
+        {
+          $setOnInsert: {
+            userId: user._id,
+            deviceId,
+            firstSeenAt: new Date(),
+            trusted: false,
+            tokenVersion: 0,
+          },
+          $set: {
+            lastSeenAt: new Date(),
+            lastIp: ip,
+            lastUserAgent: userAgent,
+            lastGeo: geoObj,
+          },
+        },
+        { upsert: true, new: true }
+      );
+
+      if (deviceDoc?.compromisedAt) {
+        return res.status(401).json({
+          message: "This device is marked compromised. Use another device or revoke it in Devices.",
+        });
+      }
     }
 
 
@@ -573,7 +623,12 @@ router.post("/mfa-login", async (req, res) => {
     }
 
     // Issue the real auth token
-    const token = createToken(user);
+    const token = createToken({
+      user,
+      deviceId,
+      deviceTokenVersion: deviceDoc?.tokenVersion || 0,
+    });
+
 
     res.cookie("token", token, {
       httpOnly: true,
