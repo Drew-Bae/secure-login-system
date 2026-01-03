@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { sendStepUpEmail } from "../api/auth";
@@ -7,7 +7,7 @@ import { sendStepUpEmail } from "../api/auth";
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, login } = useAuth();
+  const { login } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -15,14 +15,6 @@ export default function Login() {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showEnableMfaLink, setShowEnableMfaLink] = useState(false);
-  const [stepUpPending, setStepUpPending] = useState(false);
-
-
-  // If already logged in, send user to a meaningful page
-  useEffect(() => {
-    if (user && !stepUpPending) navigate("/security");
-  }, [user, stepUpPending, navigate]);
-
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -38,7 +30,6 @@ export default function Login() {
         sessionStorage.setItem("preAuthToken", res.data.preAuthToken);
         setStatus({ type: "success", message: "MFA required. Continue to verification." });
         setPassword("");
-        setStepUpPending(true);
         navigate("/mfa-verify");
         return;
       }
@@ -48,9 +39,12 @@ export default function Login() {
         sessionStorage.setItem("preAuthToken", res.data.preAuthToken);
 
         // Trigger email
-        await sendStepUpEmail(res.data.preAuthToken, res.data.risk);
+        try {
+          await sendStepUpEmail(res.data.preAuthToken, res.data.risk);
+        } catch (e) {
+          console.error("sendStepUpEmail failed:", e);
+        }
 
-        setStepUpPending(true);
         setStatus({
           type: "success",
           message: "Check your email to verify this login. The link expires in 10 minutes.",
@@ -74,7 +68,6 @@ export default function Login() {
 
       // Navigate back to the page the user originally requested, if any
       const from = location.state?.from || "/security";
-      setStepUpPending(false);
       navigate(from);
     } catch (err) {
       const code = err.response?.status;
