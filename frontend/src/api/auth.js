@@ -154,3 +154,13 @@ export function revokeDevice(deviceId) {
 export function markDeviceCompromised(deviceId, reason) {
   return api.post(`/devices/${deviceId}/compromised`, { reason });
 }
+
+// POST /auth/stepup-email
+export function sendStepUpEmail(preAuthToken, risk) {
+  return api.post("/auth/stepup-email", { preAuthToken, risk });
+}
+
+// POST /auth/verify-stepup
+export function verifyStepUp(token, preAuthToken) {
+  return api.post("/auth/verify-stepup", { token, preAuthToken });
+}
