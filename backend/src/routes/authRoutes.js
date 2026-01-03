@@ -496,25 +496,27 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
     const stepUpRequired = shouldStepUp({ riskLabel, user });
 
     if (stepUpRequired) {
-      // If MFA enabled -> return mfaRequired (you already support this)
-      if (user.mfaEnabled) {
-        const preAuthToken = createPreAuthToken(user._id);
+      const preAuthToken = createPreAuthToken(user._id);
 
+      // Prefer MFA when enabled
+      if (user.mfaEnabled) {
         return res.status(200).json({
-          stepUpRequired: true,
-          stepUpMethod: "email",
+          message: "MFA required",
+          mfaRequired: true,
           preAuthToken,
           risk: { label: riskLabel, reasons: suspiciousReasons, riskScore },
         });
       }
 
-      // If no MFA: return stepUpRequired flag for email verification (next step)
+      // Otherwise email step-up
       return res.status(200).json({
         stepUpRequired: true,
         stepUpMethod: "email",
-        risk: { label: riskLabel, reasons: suspiciousReasons },
+        preAuthToken,
+        risk: { label: riskLabel, reasons: suspiciousReasons, riskScore },
       });
     }
+
 
     // If MFA enabled, require step-up verification
     if (user.mfaEnabled) {
