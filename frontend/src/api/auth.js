@@ -144,3 +144,13 @@ export function getCurrentDeviceId() {
 export function logoutAllDevices() {
   return api.post("/auth/logout-all");
 }
+
+// POST /devices/:deviceId/revoke
+export function revokeDevice(deviceId) {
+  return api.post(`/devices/${deviceId}/revoke`);
+}
+
+// POST /devices/:deviceId/compromised
+export function markDeviceCompromised(deviceId, reason) {
+  return api.post(`/devices/${deviceId}/compromised`, { reason });
+}

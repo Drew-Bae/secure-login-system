@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { fetchDevices, trustDevice, getCurrentDeviceId } from "../api/auth";
+import {
+  fetchDevices,
+  trustDevice,
+  revokeDevice,
+  markDeviceCompromised,
+  getCurrentDeviceId,
+} from "../api/auth";
 
 export default function Devices() {
   const [devices, setDevices] = useState([]);
@@ -31,6 +37,36 @@ export default function Devices() {
     }
   }
 
+  async function handleRevoke(deviceId) {
+    setStatus(null);
+    const ok = window.confirm("Revoke this device session? (It will be logged out.)");
+    if (!ok) return;
+
+    try {
+      await revokeDevice(deviceId);
+      setStatus({ type: "success", message: "Device session revoked." });
+      await load();
+    } catch (err) {
+      setStatus({ type: "error", message: "Failed to revoke device." });
+    }
+  }
+
+  async function handleCompromised(deviceId) {
+    setStatus(null);
+    const reason = window.prompt("Reason (optional):", "lost_device");
+    const ok = window.confirm("Mark this device compromised and revoke it?");
+    if (!ok) return;
+
+    try {
+      await markDeviceCompromised(deviceId, reason || "user_marked_compromised");
+      setStatus({ type: "success", message: "Device marked compromised and revoked." });
+      await load();
+    } catch (err) {
+      setStatus({ type: "error", message: "Failed to mark device compromised." });
+    }
+  }
+
+
   useEffect(() => {
     load();
   }, []);
@@ -55,6 +91,7 @@ export default function Devices() {
           <thead>
             <tr>
               <th style={th}>Device</th>
+              <th style={th}>Compromised</th>
               <th style={th}>Trusted</th>
               <th style={th}>Last Seen</th>
               <th style={th}>Location</th>
@@ -78,6 +115,7 @@ export default function Devices() {
                     "-"
                   )}
                 </td>
+                <td style={td}>{d.compromisedAt ? "⚠️" : "—"}</td>
                 <td style={td}>{d.trusted ? "✅" : "❌"}</td>
                 <td style={td}>{d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : "-"}</td>
                 <td style={td}>
@@ -101,16 +139,23 @@ export default function Devices() {
                   </span>
                 </td>
                 <td style={td}>
-                  {d.trusted ? (
-                    "—"
-                  ) : (
-                    <button
-                      onClick={() => handleTrust(d.deviceId)}
-                      style={{ padding: "4px 10px" }}
-                    >
-                      Trust
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    {d.trusted ? (
+                      <span style={{ opacity: 0.7 }}>Trusted</span>
+                    ) : (
+                      <button onClick={() => handleTrust(d.deviceId)} style={{ padding: "4px 10px" }}>
+                        Trust
+                      </button>
+                    )}
+
+                    <button onClick={() => handleRevoke(d.deviceId)} style={{ padding: "4px 10px" }}>
+                      Revoke
                     </button>
-                  )}
+
+                    <button onClick={() => handleCompromised(d.deviceId)} style={{ padding: "4px 10px" }}>
+                      Compromised
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
