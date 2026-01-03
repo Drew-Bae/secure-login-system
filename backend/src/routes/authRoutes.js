@@ -16,6 +16,7 @@ const { decrypt } = require("../utils/crypto");
 const { authCookieOptions } = require("../config/cookies");
 const { loginLimiter, mfaLimiter } = require("../middleware/rateLimiters");
 const { sleep } = require("../utils/sleep");
+const { loginAttemptTracker } = require("../middleware/loginAttemptTracker");
 
 // helper to create JWT (session token)
 function createToken({ user, deviceId, deviceTokenVersion }) {
@@ -222,7 +223,7 @@ router.post("/reset-password", async (req, res) => {
 });
 
 // LOGIN
-router.post("/login", loginLimiter, async (req, res) => {
+router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
   const { email, password } = req.body;
 
   const rawIp = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip;
