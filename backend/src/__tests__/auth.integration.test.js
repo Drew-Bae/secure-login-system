@@ -163,4 +163,37 @@ describe("Auth integration", () => {
     // Agent B should now be rejected because its JWT has old tokenVersion
     await agentB.get("/api/auth/me").expect(401);
   });
+
+  test("lockout after 5 failed logins: 6th attempt returns 429", async () => {
+    const agent = request.agent(app);
+
+    // register
+    const csrfReg = await mintCsrf(agent);
+    await agent
+      .post("/api/auth/register")
+      .set("x-csrf-token", csrfReg)
+      .send({ email: "lock@test.com", password: "Password123!" })
+      .expect(201);
+
+    // mint one CSRF token for repeated attempts
+    const csrf = await mintCsrf(agent);
+
+    // 5 wrong password attempts => 400
+    for (let i = 0; i < 5; i++) {
+      await agent
+        .post("/api/auth/login")
+        .set("x-csrf-token", csrf)
+        .set("x-device-id", "device-lockout")
+        .send({ email: "lock@test.com", password: "WrongPassword123!" })
+        .expect(400);
+    }
+
+    // 6th attempt should be locked => 429
+    await agent
+      .post("/api/auth/login")
+      .set("x-csrf-token", csrf)
+      .set("x-device-id", "device-lockout")
+      .send({ email: "lock@test.com", password: "WrongPassword123!" })
+      .expect(429);
+  });
 });
