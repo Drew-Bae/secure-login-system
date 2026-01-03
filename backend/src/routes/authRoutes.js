@@ -13,6 +13,7 @@ const geoip = require("geoip-lite");
 const TrustedDevice = require("../models/TrustedDevice");
 const { csrfIssue } = require("../middleware/csrf");
 const { decrypt } = require("../utils/crypto");
+const { authCookieOptions } = require("../config/cookies");
 
 
 // helper to create JWT (session token)
@@ -495,11 +496,7 @@ router.post("/login", async (req, res) => {
     });
 
 
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? "none" : "lax",
-    });
+    res.cookie("token", token, authCookieOptions());
 
     return res.json({ 
       message: "Logged in",
@@ -630,11 +627,7 @@ router.post("/mfa-login", async (req, res) => {
     });
 
 
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? "none" : "lax",
-    });
+    res.cookie("token", token, authCookieOptions());
 
     return res.json({
       message: backupUsed ? "Logged in with backup code" : "Logged in with MFA",
@@ -648,12 +641,7 @@ router.post("/mfa-login", async (req, res) => {
 // LOGOUT
 router.post("/logout", (req, res) => {
   // NOTE: For cross-site cookies (SameSite=None; Secure), you must clear with matching options
-  res.clearCookie("token", {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: isProduction ? "none" : "lax",
-    path: "/",
-  });
+  res.clearCookie("token", authCookieOptions());
 
   return res.json({ message: "Logged out" });
 });
@@ -667,12 +655,7 @@ router.post("/logout-all", requireAuth, async (req, res) => {
   await user.save();
 
   // Also clear this browser's cookie immediately
-  res.clearCookie("token", {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: isProduction ? "none" : "lax",
-    path: "/",
-  });
+  res.clearCookie("token", authCookieOptions());
 
   return res.json({ message: "Logged out of all devices" });
 });

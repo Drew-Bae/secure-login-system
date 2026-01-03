@@ -1,5 +1,6 @@
 // backend/src/middleware/csrf.js
 const crypto = require("crypto");
+const { csrfCookieOptions } = require("../config/cookies");
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -19,7 +20,7 @@ function getCookieOptions() {
  */
 function csrfIssue(req, res) {
   const token = crypto.randomBytes(32).toString("hex");
-  res.cookie("csrfToken", token, getCookieOptions());
+  res.cookie("csrf_token", token, csrfCookieOptions());
   return res.status(200).json({ csrfToken: token });
 }
 
