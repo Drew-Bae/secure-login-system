@@ -12,10 +12,13 @@ function normEmail(email) {
 /**
  * Simple sliding-window limiter for login attempts per (email + ip).
  * - window: 10 minutes
- * - max: 10 attempts per window per (email, ip)
+ * - max: N attempts per window per (email, ip)
  */
 const WINDOW_MS = 10 * 60 * 1000;
-const MAX_ATTEMPTS = Number(process.env.LOGIN_EMAIL_IP_MAX || 10);
+
+function maxAttempts() {
+  return Number(process.env.LOGIN_EMAIL_IP_MAX || 10);
+}
 
 const store = new Map();
 // key -> { count, firstTs }
@@ -26,13 +29,20 @@ function prune(now) {
   }
 }
 
+// Default: bypass in tests to avoid flakiness.
+// Set FORCE_LOGIN_TRACKER=true in a specific test to enable it.
+function shouldBypass() {
+  if (isTest && process.env.FORCE_LOGIN_TRACKER !== "true") return true;
+  return false;
+}
+
 function loginAttemptTracker(req, res, next) {
-  if (isTest) return next();
+  if (shouldBypass()) return next();
 
   const email = normEmail(req.body?.email);
   const ip = getIp(req);
 
-  // If no email provided, fall back to IP-only (still lets CSRF reject earlier)
+  // If no email provided, fall back to IP-only
   const key = email ? `${email}::${ip}` : `__noemail__::${ip}`;
   const now = Date.now();
 
@@ -52,11 +62,16 @@ function loginAttemptTracker(req, res, next) {
   existing.count += 1;
   store.set(key, existing);
 
-  if (existing.count > MAX_ATTEMPTS) {
+  if (existing.count > maxAttempts()) {
     return res.status(429).json({ message: "Too many attempts. Please try again later." });
   }
 
   return next();
 }
 
-module.exports = { loginAttemptTracker };
+// For Jest: prevent state bleed between tests
+function __resetForTests() {
+  store.clear();
+}
+
+module.exports = { loginAttemptTracker, __resetForTests };
