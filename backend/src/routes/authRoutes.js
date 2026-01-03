@@ -497,10 +497,12 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
       // If MFA enabled -> return mfaRequired (you already support this)
       if (user.mfaEnabled) {
         const preAuthToken = createPreAuthToken(user._id);
+
         return res.status(200).json({
-          mfaRequired: true,
+          stepUpRequired: true,
+          stepUpMethod: "email",
           preAuthToken,
-          risk: { label: riskLabel, reasons: suspiciousReasons },
+          risk: { label: riskLabel, reasons: suspiciousReasons, riskScore },
         });
       }
 
