@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { sendStepUpEmail } from "../api/auth";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -36,6 +37,20 @@ export default function Login() {
         navigate("/mfa-verify");
         return;
       }
+
+      // Email step-up required (high-risk without MFA)
+      if (res.data?.stepUpRequired && res.data?.stepUpMethod === "email") {
+        // trigger email immediately
+        await sendStepUpEmail(res.data.preAuthToken, res.data.risk);
+
+        // show message and tell user to check email
+        setStatus({
+          type: "info",
+          message: "Check your email to verify this login. The link expires in 10 minutes.",
+        });
+        return;
+      }
+
 
       // Normal success (with optional high-risk warning)
       if (res.data?.highRisk) {
