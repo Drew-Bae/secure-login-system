@@ -46,8 +46,8 @@ export function AuthProvider({ children }) {
         reasons: res.data?.reasons || [],
       });
 
-      // If MFA step-up required, do NOT call /me yet
-      if (res.data?.mfaRequired) return res;
+      // If step-up required (MFA or email), do NOT call /me yet
+      if (res.data?.mfaRequired || res.data?.stepUpRequired) return res;
 
       // Normal login: cookie is now set — load user data
       await refreshMe();
