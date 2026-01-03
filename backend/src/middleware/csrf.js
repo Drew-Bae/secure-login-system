@@ -33,7 +33,7 @@ function csrfProtect(req, res, next) {
   // Allow CSRF mint endpoint itself
   if (req.path === "/api/auth/csrf") return next();
 
-  const cookieToken = req.cookies?.csrfToken;
+  const cookieToken = req.cookies?.csrf_token || req.cookies?.csrfToken;
   const headerToken = req.headers["x-csrf-token"];
 
   if (!cookieToken || !headerToken || cookieToken !== headerToken) {
