@@ -2,17 +2,6 @@
 const crypto = require("crypto");
 const { csrfCookieOptions } = require("../config/cookies");
 
-const isProduction = process.env.NODE_ENV === "production";
-
-function getCookieOptions() {
-  return {
-    httpOnly: false,                 // must be readable by JS for double-submit
-    secure: isProduction,            // required if SameSite=None
-    sameSite: isProduction ? "none" : "lax",
-    path: "/",
-  };
-}
-
 /**
  * Double-submit CSRF:
  * - Server sets csrfToken cookie (NOT HttpOnly)
@@ -30,8 +19,9 @@ function csrfProtect(req, res, next) {
   // Only protect state-changing requests
   if (method === "GET" || method === "HEAD" || method === "OPTIONS") return next();
 
-  // Allow CSRF mint endpoint itself
-  if (req.path === "/api/auth/csrf") return next();
+  // Allow CSRF mint endpoint itself (use originalUrl because req.path may be mounted)
+  const url = req.originalUrl || "";
+  if (url.startsWith("/api/auth/csrf")) return next();
 
   const cookieToken = req.cookies?.csrf_token || req.cookies?.csrfToken;
   const headerToken = req.headers["x-csrf-token"];
