@@ -15,6 +15,7 @@ import AdminRoute from "./components/AdminRoute";
 import StepUpVerify from "./pages/StepUpVerify";
 import AdminUsers from "./pages/AdminUsers";
 import AdminUserDetail from "./pages/AdminUserDetail";
+import AdminAuditLog from "./pages/AdminAuditLog";
 
 export default function App() {
   return (
@@ -81,6 +82,14 @@ export default function App() {
               </AdminRoute>
             }
           />
+          <Route
+            path="/admin/audit"
+            element={
+              <AdminRoute>
+                <AdminAuditLog />
+              </AdminRoute>
+            }
+          />
         </Routes>
       </AuthProvider>
     </BrowserRouter>
@@ -134,6 +143,7 @@ function AppHeader() {
               <>
                 <Link to="/admin/login-attempts">Admin Attempts</Link>
                 <Link to="/admin/users">Admin Users</Link>
+                <Link to="/admin/audit">Admin Audit</Link>
               </>
             )}
             <span style={{ opacity: 0.85, marginLeft: 8 }}>
