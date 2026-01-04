@@ -547,4 +547,70 @@ router.post("/users/:id/revoke-sessions", requireAuth, requireAdmin, async (req,
   }
 });
 
+/**
+ * POST /api/admin/users/:id/note
+ * body: { note: string }
+ */
+router.post("/users/:id/note", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: "Invalid user id" });
+
+    const note = String(req.body?.note || "").trim();
+    if (!note || note.length < 2) return res.status(400).json({ message: "Note is required" });
+    if (note.length > 2000) return res.status(400).json({ message: "Note too long" });
+
+    const user = await User.findById(id).select("email role");
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    await writeAudit(req, {
+      action: "ADMIN_ADD_NOTE",
+      targetUserId: user._id,
+      meta: { email: user.email, note },
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Admin note error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+/**
+ * POST /api/admin/devices/:deviceRecordId/compromised
+ * body: { compromised: boolean }
+ */
+router.post("/devices/:deviceRecordId/compromised", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { deviceRecordId } = req.params;
+    if (!mongoose.isValidObjectId(deviceRecordId)) {
+      return res.status(400).json({ message: "Invalid device id" });
+    }
+
+    const compromised = Boolean(req.body?.compromised);
+
+    const device = await TrustedDevice.findById(deviceRecordId);
+    if (!device) return res.status(404).json({ message: "Device not found" });
+
+    device.compromisedAt = compromised ? new Date() : null;
+    await device.save();
+
+    await writeAudit(req, {
+      action: compromised ? "ADMIN_MARK_DEVICE_COMPROMISED" : "ADMIN_UNMARK_DEVICE_COMPROMISED",
+      targetUserId: device.userId,
+      targetDeviceId: device.deviceId,
+      meta: {
+        deviceRecordId: device._id.toString(),
+        deviceId: device.deviceId,
+        compromised,
+      },
+    });
+
+    res.json({ ok: true, compromisedAt: device.compromisedAt });
+  } catch (err) {
+    console.error("Admin device compromised error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 module.exports = router;
