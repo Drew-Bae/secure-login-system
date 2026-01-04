@@ -13,6 +13,8 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminRoute from "./components/AdminRoute";
 import StepUpVerify from "./pages/StepUpVerify";
+import AdminUsers from "./pages/AdminUsers";
+import AdminUserDetail from "./pages/AdminUserDetail";
 
 export default function App() {
   return (
@@ -59,6 +61,23 @@ export default function App() {
             element={
               <AdminRoute>
                 <AdminLoginAttempts />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/users"
+            element={
+              <AdminRoute>
+                <AdminUsers />
+              </AdminRoute>
+            }
+          />
+
+          <Route
+            path="/admin/users/:userId"
+            element={
+              <AdminRoute>
+                <AdminUserDetail />
               </AdminRoute>
             }
           />
@@ -111,7 +130,12 @@ function AppHeader() {
             <Link to="/security">Security</Link>
             <Link to="/devices">Devices</Link>
             <Link to="/mfa/setup">MFA Setup</Link>
-            {user.role === "admin" && <Link to="/admin/login-attempts">Admin</Link>}
+            {user.role === "admin" && (
+              <>
+                <Link to="/admin/login-attempts">Admin Attempts</Link>
+                <Link to="/admin/users">Admin Users</Link>
+              </>
+            )}
             <span style={{ opacity: 0.85, marginLeft: 8 }}>
               Signed in as <strong>{user.email}</strong>
             </span>

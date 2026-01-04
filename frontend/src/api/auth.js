@@ -164,3 +164,33 @@ export function sendStepUpEmail(preAuthToken, risk) {
 export function verifyStepUp(token, preAuthToken) {
   return api.post("/auth/verify-stepup", { token, preAuthToken });
 }
+
+// GET /api/admin/login-attempts (v2 filters)
+export function fetchAdminLoginAttempts(params = {}) {
+  return api.get("/admin/login-attempts", { params });
+}
+
+// GET /api/admin/users
+export function fetchAdminUsers(params = {}) {
+  return api.get("/admin/users", { params });
+}
+
+// GET /api/admin/users/:id
+export function fetchAdminUserDetail(userId) {
+  return api.get(`/admin/users/${userId}`);
+}
+
+// POST /api/admin/users/:id/unlock
+export function adminUnlockUser(userId) {
+  return api.post(`/admin/users/${userId}/unlock`);
+}
+
+// POST /api/admin/users/:id/lock
+export function adminLockUser(userId, minutes = 60) {
+  return api.post(`/admin/users/${userId}/lock`, { minutes });
+}
+
+// POST /api/admin/users/:id/revoke-sessions
+export function adminRevokeSessions(userId) {
+  return api.post(`/admin/users/${userId}/revoke-sessions`);
+}
