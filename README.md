@@ -133,7 +133,7 @@ cp backend/.env.example backend/.env
 - `PREAUTH_JWT_SECRET`
 - `MFA_ENCRYPTION_KEY`
 
-3) (Optional) Seed a demo admin user on startup (dev)
+3) (Optional) Seed a demo admin user on startup (dev)  
 Add to `backend/.env`:
 ```env
 SEED_ADMIN=true
