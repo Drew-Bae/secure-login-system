@@ -92,6 +92,36 @@ export default function AdminAuditLog() {
         </button>
       </div>
 
+      <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => {
+            const qs = buildQuery({ action, email, ip, from, to });
+            window.open(`${process.env.REACT_APP_API_URL || "http://localhost:5000"}/api/admin/audit/export.json${qs}`, "_blank");
+          }}
+          style={{ padding: "8px 12px" }}
+        >
+          Download JSON
+        </button>
+
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => {
+            const qs = buildQuery({ action, email, ip, from, to });
+            window.open(`${process.env.REACT_APP_API_URL || "http://localhost:5000"}/api/admin/audit/export.csv${qs}`, "_blank");
+          }}
+          style={{ padding: "8px 12px" }}
+        >
+          Download CSV
+        </button>
+
+        <span style={{ opacity: 0.7, alignSelf: "center" }}>
+          (exports up to 5000 events)
+        </span>
+      </div>
+
       {status && <p style={{ color: "crimson", marginBottom: 12 }}>{status.message}</p>}
 
       <p style={{ opacity: 0.8, marginBottom: 12 }}>
@@ -163,6 +193,16 @@ export default function AdminAuditLog() {
       </div>
     </div>
   );
+}
+
+function buildQuery(params) {
+  const sp = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v === undefined || v === null || v === "") return;
+    sp.set(k, v);
+  });
+  const qs = sp.toString();
+  return qs ? `?${qs}` : "";
 }
 
 function truncate(s, n) {
