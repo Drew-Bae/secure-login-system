@@ -194,3 +194,8 @@ export function adminLockUser(userId, minutes = 60) {
 export function adminRevokeSessions(userId) {
   return api.post(`/admin/users/${userId}/revoke-sessions`);
 }
+
+// GET /admin/audit
+export function fetchAdminAuditEvents(params = {}) {
+  return api.get("/admin/audit", { params });
+}
