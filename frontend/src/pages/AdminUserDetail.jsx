@@ -5,6 +5,8 @@ import {
   adminUnlockUser,
   adminLockUser,
   adminRevokeSessions,
+  adminAddUserNote,
+  adminSetDeviceCompromised,
 } from "../api/auth";
 
 export default function AdminUserDetail() {
@@ -13,6 +15,7 @@ export default function AdminUserDetail() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null);
   const [payload, setPayload] = useState(null);
+  const [note, setNote] = useState("");
 
   async function load() {
     setLoading(true);
@@ -117,12 +120,34 @@ export default function AdminUserDetail() {
             </button>
           </div>
 
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 24 }}>
+            <input
+              placeholder="Admin note (ex: suspicious password spraying pattern)"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              style={{ padding: "8px 10px", minWidth: 420 }}
+            />
+            <button
+              type="button"
+              onClick={() =>
+                doAction(async () => {
+                  await adminAddUserNote(user._id, note);
+                  setNote("");
+                })
+              }
+              disabled={loading || note.trim().length < 2}
+              style={{ padding: "8px 12px" }}
+            >
+              Add Note
+            </button>
+          </div>
+
           <h2>Devices</h2>
           {devices.length === 0 ? (
             <p>No devices recorded.</p>
           ) : (
             <div style={{ overflowX: "auto", marginBottom: 24 }}>
-              <table style={{ borderCollapse: "collapse", minWidth: 900, fontSize: 14 }}>
+              <table style={{ borderCollapse: "collapse", minWidth: 1100, fontSize: 14 }}>
                 <thead>
                   <tr>
                     <th style={th}>Device ID</th>
@@ -131,6 +156,7 @@ export default function AdminUserDetail() {
                     <th style={th}>Last Seen</th>
                     <th style={th}>Last IP</th>
                     <th style={th}>Last Geo</th>
+                    <th style={th}>Response</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -142,6 +168,27 @@ export default function AdminUserDetail() {
                       <td style={td}>{d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : "—"}</td>
                       <td style={td}>{d.lastIp || "—"}</td>
                       <td style={td}>{d.lastGeo?.country ? `${d.lastGeo.country}${d.lastGeo.city ? " / " + d.lastGeo.city : ""}` : "—"}</td>
+                      <td style={td}>
+                        {d.compromisedAt ? (
+                          <button
+                            type="button"
+                            disabled={loading}
+                            onClick={() => doAction(() => adminSetDeviceCompromised(d._id, false))}
+                            style={{ padding: "6px 10px" }}
+                          >
+                            Clear Compromised
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={loading}
+                            onClick={() => doAction(() => adminSetDeviceCompromised(d._id, true))}
+                            style={{ padding: "6px 10px" }}
+                          >
+                            Mark Compromised
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

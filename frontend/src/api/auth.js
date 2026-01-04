@@ -199,3 +199,13 @@ export function adminRevokeSessions(userId) {
 export function fetchAdminAuditEvents(params = {}) {
   return api.get("/admin/audit", { params });
 }
+
+// POST /admin/users
+export function adminAddUserNote(userId, note) {
+  return api.post(`/admin/users/${userId}/note`, { note });
+}
+
+// POST /admin/devices
+export function adminSetDeviceCompromised(deviceRecordId, compromised) {
+  return api.post(`/admin/devices/${deviceRecordId}/compromised`, { compromised });
+}
