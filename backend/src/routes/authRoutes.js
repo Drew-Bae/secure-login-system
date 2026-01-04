@@ -13,7 +13,11 @@ const geoip = require("geoip-lite");
 const TrustedDevice = require("../models/TrustedDevice");
 const { csrfIssue } = require("../middleware/csrf");
 const { decrypt } = require("../utils/crypto");
-const { authCookieOptions } = require("../config/cookies");
+const {
+  authCookieOptions,
+  authCookieClearOptions,
+  csrfCookieOptions,
+} = require("../config/cookies");
 const { loginLimiter, mfaLimiter } = require("../middleware/rateLimiters");
 const { sleep } = require("../utils/sleep");
 const { loginAttemptTracker } = require("../middleware/loginAttemptTracker");
@@ -831,11 +835,10 @@ router.post("/mfa-login", mfaLimiter, async (req, res) => {
 
 // LOGOUT
 router.post("/logout", (req, res) => {
-  // NOTE: For cross-site cookies (SameSite=None; Secure), you must clear with matching options
-  res.clearCookie("token", authCookieOptions());
-
+  res.clearCookie("token", authCookieClearOptions());
   return res.json({ message: "Logged out" });
 });
+
 
 // GLOBAL LOGOUT
 router.post("/logout-all", requireAuth, async (req, res) => {
@@ -846,7 +849,7 @@ router.post("/logout-all", requireAuth, async (req, res) => {
   await user.save();
 
   // Also clear this browser's cookie immediately
-  res.clearCookie("token", authCookieOptions());
+  res.clearCookie("token", authCookieClearOptions());
 
   return res.json({ message: "Logged out of all devices" });
 });

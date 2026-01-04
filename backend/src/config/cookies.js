@@ -38,4 +38,11 @@ function csrfCookieOptions() {
   };
 }
 
-module.exports = { authCookieOptions, csrfCookieOptions };
+function authCookieClearOptions() {
+  const opts = authCookieOptions();
+  delete opts.maxAge;     // IMPORTANT: don’t pass maxAge to clearCookie
+  delete opts.expires;    // just in case
+  return opts;
+}
+
+module.exports = { authCookieOptions, authCookieClearOptions, csrfCookieOptions };
