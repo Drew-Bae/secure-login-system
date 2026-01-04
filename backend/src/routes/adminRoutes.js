@@ -24,6 +24,77 @@ function parseDateMaybe(v) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+async function buildAuditQuery(req) {
+  const {
+    action,
+    email,
+    actorUserId,
+    targetUserId,
+    ip,
+    from,
+    to,
+  } = req.query;
+
+  const conditions = [];
+
+  if (action) {
+    const list = String(action)
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 50);
+
+    if (list.length === 1) conditions.push({ action: list[0] });
+    if (list.length > 1) conditions.push({ action: { $in: list } });
+  }
+
+  if (email) {
+    const safe = escapeRegex(String(email).slice(0, 200));
+    const users = await User.find({ email: { $regex: safe, $options: "i" } })
+      .select("_id")
+      .limit(200);
+
+    const ids = users.map((u) => u._id);
+    if (ids.length === 0) return { none: true };
+
+    conditions.push({
+      $or: [{ actorUserId: { $in: ids } }, { targetUserId: { $in: ids } }],
+    });
+  }
+
+  if (actorUserId) {
+    if (!mongoose.isValidObjectId(actorUserId)) {
+      const err = new Error("Invalid actorUserId");
+      err.status = 400;
+      throw err;
+    }
+    conditions.push({ actorUserId });
+  }
+
+  if (targetUserId) {
+    if (!mongoose.isValidObjectId(targetUserId)) {
+      const err = new Error("Invalid targetUserId");
+      err.status = 400;
+      throw err;
+    }
+    conditions.push({ targetUserId });
+  }
+
+  if (ip) conditions.push({ ip: String(ip).slice(0, 100) });
+
+  const fromD = parseDateMaybe(from);
+  const toD = parseDateMaybe(to);
+  if (fromD || toD) {
+    const range = {};
+    if (fromD) range.$gte = fromD;
+    if (toD) range.$lte = toD;
+    conditions.push({ createdAt: range });
+  }
+
+  return { query: conditions.length ? { $and: conditions } : {} };
+}
+
+
 /**
  * GET /api/admin/login-attempts
  * Query:
@@ -290,6 +361,105 @@ router.get("/audit", requireAuth, requireAdmin, async (req, res) => {
   } catch (err) {
     console.error("Admin audit error:", err);
     res.status(500).json({ message: "Server error" });
+  }
+});
+
+/**
+ * GET /api/admin/audit/export.json
+ * Downloads filtered audit events as JSON
+ */
+router.get("/audit/export.json", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const result = await buildAuditQuery(req);
+    if (result.none) {
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Content-Disposition", 'attachment; filename="audit-export.json"');
+      return res.send(JSON.stringify([], null, 2));
+    }
+
+    const events = await AuditEvent.find(result.query)
+      .sort({ createdAt: -1 })
+      .limit(5000)
+      .populate({ path: "actorUserId", select: "email role" })
+      .populate({ path: "targetUserId", select: "email role" });
+
+    res.setHeader("Content-Type", "application/json");
+    res.setHeader("Content-Disposition", 'attachment; filename="audit-export.json"');
+    return res.send(JSON.stringify(events, null, 2));
+  } catch (err) {
+    console.error("Admin audit export.json error:", err);
+    return res.status(err.status || 500).json({ message: err.message || "Server error" });
+  }
+});
+
+/**
+ * GET /api/admin/audit/export.csv
+ * Downloads filtered audit events as CSV
+ */
+router.get("/audit/export.csv", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const result = await buildAuditQuery(req);
+    if (result.none) {
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", 'attachment; filename="audit-export.csv"');
+      return res.send("time,action,actor_email,actor_role,target_email,target_role,target_device_id,ip,user_agent,meta\n");
+    }
+
+    const events = await AuditEvent.find(result.query)
+      .sort({ createdAt: -1 })
+      .limit(5000)
+      .populate({ path: "actorUserId", select: "email role" })
+      .populate({ path: "targetUserId", select: "email role" });
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", 'attachment; filename="audit-export.csv"');
+
+    // CSV header
+    const header = [
+      "time",
+      "action",
+      "actor_email",
+      "actor_role",
+      "target_email",
+      "target_role",
+      "target_device_id",
+      "ip",
+      "user_agent",
+      "meta",
+    ].join(",") + "\n";
+
+    function csvEscape(v) {
+      const s = v === null || v === undefined ? "" : String(v);
+      const needs = /[",\n]/.test(s);
+      const escaped = s.replace(/"/g, '""');
+      return needs ? `"${escaped}"` : escaped;
+    }
+
+    const lines = events.map((e) => {
+      const actorEmail = e.actorUserId?.email || "";
+      const actorRole = e.actorUserId?.role || e.actorRole || "";
+      const targetEmail = e.targetUserId?.email || "";
+      const targetRole = e.targetUserId?.role || "";
+      const meta = e.meta ? JSON.stringify(e.meta) : "";
+
+      return [
+        csvEscape(e.createdAt ? new Date(e.createdAt).toISOString() : ""),
+        csvEscape(e.action || ""),
+        csvEscape(actorEmail),
+        csvEscape(actorRole),
+        csvEscape(targetEmail),
+        csvEscape(targetRole),
+        csvEscape(e.targetDeviceId || ""),
+        csvEscape(e.ip || ""),
+        csvEscape(e.userAgent || ""),
+        csvEscape(meta),
+      ].join(",");
+    });
+
+    return res.send(header + lines.join("\n") + (lines.length ? "\n" : ""));
+  } catch (err) {
+    console.error("Admin audit export.csv error:", err);
+    return res.status(err.status || 500).json({ message: err.message || "Server error" });
   }
 });
 
