@@ -1,0 +1,61 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: sls_mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  backend:
+    image: node:20-alpine
+    container_name: sls_backend
+    working_dir: /app
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    ports:
+      - "5000:5000"
+    environment:
+      # docker-compose DB connection
+      MONGO_URI: mongodb://mongo:27017/sls
+
+      # CORS origin for local dev
+      CLIENT_URL: http://localhost:3000
+      CLIENT_URLS: http://localhost:3000
+
+      # cookie defaults for localhost
+      NODE_ENV: development
+      COOKIE_SECURE: "false"
+      COOKIE_SAMESITE: lax
+
+      # optional polling stability (esp. Windows)
+      CHOKIDAR_USEPOLLING: "true"
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: sh -c "npm ci && npm run dev"
+
+  frontend:
+    image: node:20-alpine
+    container_name: sls_frontend
+    working_dir: /app
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    environment:
+      REACT_APP_API_URL: http://localhost:5000
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: sh -c "npm ci && npm start"
+
+volumes:
+  mongo_data:
