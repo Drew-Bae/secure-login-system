@@ -5,6 +5,7 @@ const User = require("../models/User");
 const TrustedDevice = require("../models/TrustedDevice");
 const { requireAuth, requireAdmin } = require("../middleware/authMiddleware");
 const { writeAudit } = require("../utils/audit");
+const AuditEvent = require("../models/AuditEvent");
 
 const router = express.Router();
 
@@ -182,6 +183,112 @@ router.get("/users/:id", requireAuth, requireAdmin, async (req, res) => {
     res.json({ user, devices, attempts });
   } catch (err) {
     console.error("Admin user detail error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+/**
+ * GET /api/admin/audit
+ * Query:
+ *  - action (exact or comma-separated list)
+ *  - email (matches actor or target email, case-insensitive)
+ *  - actorUserId, targetUserId (ObjectId)
+ *  - ip
+ *  - from, to (ISO date)
+ *  - page, limit
+ */
+router.get("/audit", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const {
+      action,
+      email,
+      actorUserId,
+      targetUserId,
+      ip,
+      from,
+      to,
+      page = "1",
+      limit = "50",
+    } = req.query;
+
+    const conditions = [];
+
+    // action filter: allow comma-separated
+    if (action) {
+      const list = String(action)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, 50);
+
+      if (list.length === 1) conditions.push({ action: list[0] });
+      if (list.length > 1) conditions.push({ action: { $in: list } });
+    }
+
+    // filter by email (actor OR target)
+    if (email) {
+      const safe = escapeRegex(String(email).slice(0, 200));
+      const users = await User.find({ email: { $regex: safe, $options: "i" } })
+        .select("_id")
+        .limit(200);
+
+      const ids = users.map((u) => u._id);
+      if (ids.length === 0) {
+        // No matching users -> no results
+        return res.json({ events: [], page: 1, limit: 50, total: 0, hasMore: false });
+      }
+
+      conditions.push({
+        $or: [{ actorUserId: { $in: ids } }, { targetUserId: { $in: ids } }],
+      });
+    }
+
+    if (actorUserId) {
+      if (!mongoose.isValidObjectId(actorUserId)) return res.status(400).json({ message: "Invalid actorUserId" });
+      conditions.push({ actorUserId });
+    }
+
+    if (targetUserId) {
+      if (!mongoose.isValidObjectId(targetUserId)) return res.status(400).json({ message: "Invalid targetUserId" });
+      conditions.push({ targetUserId });
+    }
+
+    if (ip) conditions.push({ ip: String(ip).slice(0, 100) });
+
+    const fromD = parseDateMaybe(from);
+    const toD = parseDateMaybe(to);
+    if (fromD || toD) {
+      const range = {};
+      if (fromD) range.$gte = fromD;
+      if (toD) range.$lte = toD;
+      conditions.push({ createdAt: range });
+    }
+
+    const query = conditions.length ? { $and: conditions } : {};
+
+    const pageNum = Math.max(1, toInt(page, 1));
+    const limitNum = Math.min(200, Math.max(1, toInt(limit, 50)));
+    const skip = (pageNum - 1) * limitNum;
+
+    const [total, events] = await Promise.all([
+      AuditEvent.countDocuments(query),
+      AuditEvent.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .populate({ path: "actorUserId", select: "email role" })
+        .populate({ path: "targetUserId", select: "email role" }),
+    ]);
+
+    res.json({
+      events,
+      page: pageNum,
+      limit: limitNum,
+      total,
+      hasMore: skip + events.length < total,
+    });
+  } catch (err) {
+    console.error("Admin audit error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
