@@ -114,24 +114,53 @@ Future work expands on this base with email verification, MFA, rate limiting, ac
 - Backend: Node.js + Express
 - Database: MongoDB + Mongoose
 - Auth: JWT (HttpOnly cookies)
-- Email: Zoho SMTP (Phase 2)
+- Email: Resend (transactional email)
 - Deployment: 
     - Backend: Render
     - Frontend: Vercel
 
-## Getting Started 
-Detailed setup instructions will be added after Phase 1 deployment.
-For now, the project runs with:
+## Getting Started (Local)
 
-### Backend
-```arduino
+### Option A (Recommended): Run everything with Docker Compose
+
+1) Create backend env file
+```bash
+cp backend/.env.example backend/.env
+```
+
+2) Fill required secrets in `backend/.env`
+- `JWT_SECRET`
+- `PREAUTH_JWT_SECRET`
+- `MFA_ENCRYPTION_KEY`
+
+3) (Optional) Seed a demo admin user on startup (dev)
+Add to `backend/.env`:
+```env
+SEED_ADMIN=true
+SEED_ADMIN_EMAIL=admin@example.com
+SEED_ADMIN_PASSWORD=pass123
+# Only set this to true temporarily if the admin already exists locally and you want to reset it
+SEED_ADMIN_FORCE_PASSWORD=false
+```
+
+4) Start the stack
+```bash
+docker compose up
+```
+- Frontend: http://localhost:3000
+- Backend: http://localhost:5000
+
+### Option B: Run manually (no Docker)
+#### Backend
+```bash
 cd backend
+cp .env.example .env
+# fill required env vars in .env
 npm install
 npm run dev
 ```
-
-### Frontend
-```powershell
+#### Frontend
+```bash
 cd frontend
 npm install
 npm start
