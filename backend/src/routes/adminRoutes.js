@@ -8,6 +8,8 @@ const { writeAudit } = require("../utils/audit");
 const AuditEvent = require("../models/AuditEvent");
 const BlockedIp = require("../models/BlockedIp");
 const { getClientIp } = require("../middleware/blockIpMiddleware");
+const crypto = require("crypto");
+const { sendPasswordResetEmail } = require("../services/emailService");
 
 const router = express.Router();
 
@@ -24,6 +26,20 @@ function parseDateMaybe(v) {
   if (!v) return null;
   const d = new Date(v);
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function getClientUrlBase() {
+  const single = (process.env.CLIENT_URL || "").trim();
+  if (single) return single.replace(/\/$/, "");
+
+  const list = (process.env.CLIENT_URLS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => s.replace(/\/$/, ""));
+
+  const nonLocal = list.find((u) => !u.includes("localhost") && !u.includes("127.0.0.1"));
+  return nonLocal || list[0] || "http://localhost:3000";
 }
 
 async function buildAuditQuery(req) {
@@ -215,7 +231,7 @@ router.get("/users", requireAuth, requireAdmin, async (req, res) => {
     const [total, users] = await Promise.all([
       User.countDocuments(query),
       User.find(query)
-        .select("email role mfaEnabled failedLoginCount lockoutUntil tokenVersion createdAt updatedAt")
+        .select("email role mfaEnabled failedLoginCount lockoutUntil tokenVersion mustResetPassword mustResetPasswordAt createdAt updatedAt")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNum),
@@ -244,7 +260,7 @@ router.get("/users/:id", requireAuth, requireAdmin, async (req, res) => {
     if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: "Invalid user id" });
 
     const user = await User.findById(id).select(
-      "email role mfaEnabled failedLoginCount lockoutUntil tokenVersion createdAt updatedAt"
+      "email role mfaEnabled failedLoginCount lockoutUntil tokenVersion mustResetPassword mustResetPasswordAt mustResetPasswordReason createdAt updatedAt"
     );
     if (!user) return res.status(404).json({ message: "User not found" });
 
@@ -582,6 +598,63 @@ router.post("/users/:id/revoke-sessions", requireAuth, requireAdmin, async (req,
   } catch (err) {
     console.error("Admin revoke sessions error:", err);
     res.status(500).json({ message: "Server error" });
+  }
+});
+
+/**
+ * POST /api/admin/users/:id/force-password-reset
+ * body: { reason?: string, sendEmail?: boolean }
+ */
+router.post("/users/:id/force-password-reset", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: "Invalid user id" });
+
+    const reason = String(req.body?.reason || "").trim().slice(0, 500);
+    const sendEmail = req.body?.sendEmail !== false; // default true
+
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Set forced reset flags
+    user.mustResetPassword = true;
+    user.mustResetPasswordAt = new Date();
+    user.mustResetPasswordReason = reason || undefined;
+
+    // Revoke sessions so the user is forced to re-auth
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
+
+    // Generate reset token + expiry
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+    const expires = new Date(Date.now() + 60 * 60 * 1000); // 60 minutes
+
+    user.resetPasswordTokenHash = tokenHash;
+    user.resetPasswordExpiresAt = expires;
+
+    await user.save();
+
+    if (sendEmail) {
+      const base = getClientUrlBase();
+      const resetUrl = `${base}/reset-password?token=${rawToken}`;
+
+      try {
+        await sendPasswordResetEmail({ to: user.email, resetUrl });
+      } catch (e) {
+        console.error("Admin forced reset email failed:", e);
+      }
+    }
+
+    await writeAudit(req, {
+      action: "ADMIN_FORCE_PASSWORD_RESET",
+      targetUserId: user._id,
+      meta: { email: user.email, reason, sendEmail, expiresAt: expires.toISOString(), tokenVersion: user.tokenVersion },
+    });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("Admin force-password-reset error:", err);
+    return res.status(500).json({ message: "Server error" });
   }
 });
 
