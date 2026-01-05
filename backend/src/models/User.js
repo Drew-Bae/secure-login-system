@@ -31,6 +31,10 @@ const userSchema = new mongoose.Schema(
     resetPasswordTokenHash: { type: String },
     resetPasswordExpiresAt: { type: Date },
     backupCodeHashes: [{ type: String }],
+    // Force password reset (admin action)
+    mustResetPassword: { type: Boolean, default: false },
+    mustResetPasswordAt: { type: Date },
+    mustResetPasswordReason: { type: String },
     // Email verification
     emailVerifiedAt: { type: Date },
     emailVerifyTokenHash: { type: String },

@@ -10,7 +10,7 @@ async function requireAuth(req, res, next) {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
 
     const user = await User.findById(payload.userId).select(
-      "email role tokenVersion mfaEnabled mfaSecretEncrypted backupCodeHashes failedLoginCount lockoutUntil"
+      "email role tokenVersion mfaEnabled mfaSecretEncrypted backupCodeHashes failedLoginCount lockoutUntil emailVerifiedAt mustResetPassword mustResetPasswordAt"
     );
 
     if (!user) return res.status(401).json({ message: "User not found" });
@@ -37,6 +37,14 @@ async function requireAuth(req, res, next) {
       if (device.compromisedAt) {
         return res.status(401).json({ message: "Device marked compromised. Please log in again." });
       }
+    }
+
+    // Forced password reset gate
+    if (user.mustResetPassword) {
+      return res.status(403).json({
+        message: "Password reset required. Please reset your password to continue.",
+        actionRequired: "FORCE_PASSWORD_RESET",
+      });
     }
 
     req.user = user;

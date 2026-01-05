@@ -69,6 +69,29 @@ async function issueEmailVerification(user) {
   return { verifyUrl };
 }
 
+const RESET_TTL_MINUTES = 20;
+
+async function issuePasswordReset(user, ttlMinutes = RESET_TTL_MINUTES) {
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+  const expires = new Date(Date.now() + ttlMinutes * 60 * 1000);
+
+  user.resetPasswordTokenHash = tokenHash;
+  user.resetPasswordExpiresAt = expires;
+  await user.save();
+
+  const base = getClientUrlBase();
+  const resetUrl = `${base}/reset-password?token=${rawToken}`;
+
+  try {
+    await sendPasswordResetEmail({ to: user.email, resetUrl });
+  } catch (e) {
+    console.error("sendPasswordResetEmail failed:", e);
+  }
+
+  return { expires };
+}
+
 // helper to create JWT (session token)
 function createToken({ user, deviceId, deviceTokenVersion }) {
   return jwt.sign(
@@ -171,22 +194,20 @@ router.get("/csrf", csrfIssue);
 router.post("/register", async (req, res) => {
   try {
     const { email, password } = req.body;
+    const normalizedEmail = String(email).toLowerCase().trim();
 
     if (!email || !password) {
       return res.status(400).json({ message: "Email and password are required" });
     }
 
-    const existing = await User.findOne({ email });
+    const existing = await User.findOne({ email: normalizedEmail });
     if (existing) {
       return res.status(400).json({ message: "Email already registered" });
     }
 
     const hashed = await bcrypt.hash(password, 10);
 
-    const user = await User.create({
-      email,
-      password: hashed,
-    });
+    const user = await User.create({ email: normalizedEmail, password: hashed });
     await issueEmailVerification(user);
 
     return res
@@ -260,31 +281,15 @@ router.post("/forgot-password", async (req, res) => {
 
     if (!email) return res.status(200).json(genericResponse);
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: String(email).toLowerCase().trim() });
     if (!user) return res.status(200).json(genericResponse);
 
-    const rawToken = crypto.randomBytes(32).toString("hex");
-    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
-    const expires = new Date(Date.now() + 20 * 60 * 1000);
-
-    user.resetPasswordTokenHash = tokenHash;
-    user.resetPasswordExpiresAt = expires;
-    await user.save();
-
-    const base = process.env.CLIENT_URL || "http://localhost:3000";
-    const resetUrl = `${base}/reset-password?token=${rawToken}`;
-
-    // If email fails, don't throw the whole route
-    try {
-      await sendPasswordResetEmail({ to: user.email, resetUrl });
-    } catch (e) {
-      console.error("sendPasswordResetEmail failed:", e);
-    }
+    await issuePasswordReset(user); // ✅ here
 
     return res.status(200).json(genericResponse);
   } catch (err) {
     console.error("Forgot password error:", err);
-    return res.status(200).json(genericResponse); // <- important
+    return res.status(200).json(genericResponse);
   }
 });
 
@@ -324,6 +329,14 @@ router.post("/reset-password", async (req, res) => {
     user.resetPasswordTokenHash = undefined;
     user.resetPasswordExpiresAt = undefined;
 
+    // Clear forced-reset flag if it was set
+    user.mustResetPassword = false;
+    user.mustResetPasswordAt = null;
+    user.mustResetPasswordReason = undefined;
+
+    // Revoke sessions after password change (good security practice)
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
+
     await user.save();
 
     return res.json({ message: "Password reset successful" });
@@ -357,7 +370,7 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
       return res.status(400).json({ message: "Email and password are required" });
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: String(email).toLowerCase().trim() });
 
     // Always keep responses generic
     if (!user) {
@@ -614,6 +627,25 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
       }
     }
 
+    // ✅ Forced password reset (admin action)
+    if (user.mustResetPassword) {
+      const now = new Date();
+      const hasValidReset =
+        !!user.resetPasswordTokenHash &&
+        !!user.resetPasswordExpiresAt &&
+        user.resetPasswordExpiresAt > now;
+
+      // Avoid spamming: only send a new reset link if none is valid
+      if (!hasValidReset) {
+        await issuePasswordReset(user, 60); // longer TTL for forced resets
+      }
+
+      return res.status(403).json({
+        message: "Password reset required. Please reset your password to continue.",
+        actionRequired: "FORCE_PASSWORD_RESET",
+      });
+    }
+
     const riskLabel = blockRisk ? "high" : highRisk ? "medium" : "low";
 
     const stepUpRequired = shouldStepUp({ riskLabel, user });
@@ -745,7 +777,7 @@ router.post("/stepup-email", async (req, res) => {
       reasons: risk?.reasons || [],
     });
 
-    const clientBase = process.env.CLIENT_URL || "http://localhost:3000";
+    const clientBase = getClientUrlBase();
     const verifyUrl = `${clientBase}/step-up/verify?token=${token}&preAuthToken=${encodeURIComponent(preAuthToken)}`;
 
     try {
