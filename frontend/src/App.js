@@ -16,6 +16,7 @@ import StepUpVerify from "./pages/StepUpVerify";
 import AdminUsers from "./pages/AdminUsers";
 import AdminUserDetail from "./pages/AdminUserDetail";
 import AdminAuditLog from "./pages/AdminAuditLog";
+import AdminBlockedIps from "./pages/AdminBlockedIps";
 
 export default function App() {
   return (
@@ -90,6 +91,14 @@ export default function App() {
               </AdminRoute>
             }
           />
+          <Route
+            path="/admin/blocked-ips"
+            element={
+              <AdminRoute>
+                <AdminBlockedIps />
+              </AdminRoute>
+            }
+          />
         </Routes>
       </AuthProvider>
     </BrowserRouter>
@@ -144,6 +153,7 @@ function AppHeader() {
                 <Link to="/admin/login-attempts">Admin Attempts</Link>
                 <Link to="/admin/users">Admin Users</Link>
                 <Link to="/admin/audit">Admin Audit</Link>
+                <Link to="/admin/blocked-ips">Admin Blocked IPs</Link>
               </>
             )}
             <span style={{ opacity: 0.85, marginLeft: 8 }}>

@@ -209,3 +209,15 @@ export function adminAddUserNote(userId, note) {
 export function adminSetDeviceCompromised(deviceRecordId, compromised) {
   return api.post(`/admin/devices/${deviceRecordId}/compromised`, { compromised });
 }
+
+export function adminBlockIp(ip, minutes = 60, reason = "") {
+  return api.post("/admin/blocked-ips", { ip, minutes, reason });
+}
+
+export function fetchBlockedIps(params = {}) {
+  return api.get("/admin/blocked-ips", { params });
+}
+
+export function adminUnblockIp(blockId) {
+  return api.delete(`/admin/blocked-ips/${blockId}`);
+}

@@ -1,11 +1,27 @@
 import { useEffect, useState } from "react";
-import { fetchLoginAttempts } from "../api/auth";
+import { fetchLoginAttempts, adminBlockIp } from "../api/auth";
 
 export default function AdminLoginAttempts() {
   const [attempts, setAttempts] = useState([]);
   const [onlySuspicious, setOnlySuspicious] = useState(true);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null);
+
+  async function doAction(fn) {
+    setLoading(true);
+    setStatus(null);
+    try {
+      await fn();
+      // refresh after action so you see latest attempts
+      await loadAttempts({ onlySuspicious });
+      setStatus({ type: "ok", message: "Action completed." });
+    } catch (err) {
+      const msg = err.response?.data?.message || "Action failed.";
+      setStatus({ type: "error", message: msg });
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function loadAttempts(options = {}) {
     setLoading(true);
@@ -102,6 +118,7 @@ export default function AdminLoginAttempts() {
                 <th style={thStyle}>Risk</th>
                 <th style={thStyle}>Raw Risk</th>
                 <th style={thStyle}>Reasons</th>
+                <th style={thStyle}>Response</th>
               </tr>
             </thead>
             <tbody>
@@ -149,6 +166,36 @@ export default function AdminLoginAttempts() {
                       ? a.reasons.join(", ")
                       : "-"}
                   </td>
+                  <td style={tdStyle}>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        // 1) validate IP exists
+                        if (!a.ip || a.ip === "-") return;
+
+                        // 2) prompt minutes
+                        const minutesRaw = window.prompt("Block how many minutes?", "60");
+                        if (!minutesRaw) return;
+
+                        const minutes = parseInt(minutesRaw, 10);
+                        if (!Number.isFinite(minutes) || minutes < 1) {
+                          window.alert("Please enter a valid number of minutes (>= 1).");
+                          return;
+                        }
+
+                        // 3) prompt reason (optional)
+                        const reason = window.prompt("Reason (optional):", "Suspicious activity") || "";
+
+                        // 4) call backend using your doAction wrapper
+                        await doAction(() => adminBlockIp(a.ip, minutes, reason));
+                      }}
+                      disabled={!a.ip || loading}
+                      style={{ padding: "6px 10px" }}
+                    >
+                      Block IP
+                    </button>
+                  </td>
+
                 </tr>
               ))}
             </tbody>
