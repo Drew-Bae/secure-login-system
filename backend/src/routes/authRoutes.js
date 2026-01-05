@@ -589,10 +589,14 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
         await issueEmailVerification(user);
       }
 
-      return res.status(403).json({
-        message: "Please verify your email to continue.",
-        actionRequired: "VERIFY_EMAIL",
-      });
+      // ✅ IMPORTANT: in test env, issueEmailVerification() auto-verifies.
+      // So only block if the user is STILL not verified.
+      if (!user.emailVerifiedAt) {
+        return res.status(403).json({
+          message: "Please verify your email to continue.",
+          actionRequired: "VERIFY_EMAIL",
+        });
+      }
     }
 
     const riskLabel = blockRisk ? "high" : highRisk ? "medium" : "low";
