@@ -7,6 +7,7 @@ import {
   adminRevokeSessions,
   adminAddUserNote,
   adminSetDeviceCompromised,
+  adminForcePasswordReset,
 } from "../api/auth";
 
 export default function AdminUserDetail() {
@@ -16,6 +17,7 @@ export default function AdminUserDetail() {
   const [status, setStatus] = useState(null);
   const [payload, setPayload] = useState(null);
   const [note, setNote] = useState("");
+  const [forceReason, setForceReason] = useState("");
 
   async function load() {
     setLoading(true);
@@ -76,10 +78,32 @@ export default function AdminUserDetail() {
             <div><strong>Role:</strong> {user.role}</div>
             <div><strong>MFA:</strong> {user.mfaEnabled ? "enabled" : "disabled"}</div>
             <div><strong>Failed logins:</strong> {user.failedLoginCount ?? 0}</div>
+
             <div>
               <strong>Locked until:</strong>{" "}
               {user.lockoutUntil ? new Date(user.lockoutUntil).toLocaleString() : "—"}
             </div>
+
+            {/* ✅ Added: helpful status fields */}
+            <div>
+              <strong>Email verified:</strong>{" "}
+              {user.emailVerifiedAt ? new Date(user.emailVerifiedAt).toLocaleString() : "No"}
+            </div>
+            <div>
+              <strong>Must reset password:</strong>{" "}
+              {user.mustResetPassword ? "YES" : "No"}
+            </div>
+            {user.mustResetPasswordAt ? (
+              <div>
+                <strong>Reset required at:</strong>{" "}
+                {new Date(user.mustResetPasswordAt).toLocaleString()}
+              </div>
+            ) : null}
+            {user.mustResetPasswordReason ? (
+              <div>
+                <strong>Reset reason:</strong> {user.mustResetPasswordReason}
+              </div>
+            ) : null}
           </div>
 
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 24 }}>
@@ -142,6 +166,34 @@ export default function AdminUserDetail() {
             </button>
           </div>
 
+          {/* ✅ Added: Force reset section */}
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 24 }}>
+            <input
+              placeholder="Force reset reason (ex: credentials suspected compromised)"
+              value={forceReason}
+              onChange={(e) => setForceReason(e.target.value)}
+              style={{ padding: "8px 10px", minWidth: 420 }}
+            />
+            <button
+              type="button"
+              onClick={() =>
+                doAction(async () => {
+                  const ok = window.confirm(
+                    "Force a password reset for this user? They will be blocked until they reset."
+                  );
+                  if (!ok) return;
+
+                  await adminForcePasswordReset(user._id, forceReason);
+                  setForceReason("");
+                })
+              }
+              disabled={loading}
+              style={{ padding: "8px 12px" }}
+            >
+              Force Password Reset
+            </button>
+          </div>
+
           <h2>Devices</h2>
           {devices.length === 0 ? (
             <p>No devices recorded.</p>
@@ -167,7 +219,11 @@ export default function AdminUserDetail() {
                       <td style={td}>{d.compromisedAt ? "⚠️" : "—"}</td>
                       <td style={td}>{d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : "—"}</td>
                       <td style={td}>{d.lastIp || "—"}</td>
-                      <td style={td}>{d.lastGeo?.country ? `${d.lastGeo.country}${d.lastGeo.city ? " / " + d.lastGeo.city : ""}` : "—"}</td>
+                      <td style={td}>
+                        {d.lastGeo?.country
+                          ? `${d.lastGeo.country}${d.lastGeo.city ? " / " + d.lastGeo.city : ""}`
+                          : "—"}
+                      </td>
                       <td style={td}>
                         {d.compromisedAt ? (
                           <button
@@ -218,11 +274,15 @@ export default function AdminUserDetail() {
                     <tr key={a._id}>
                       <td style={td}>{new Date(a.createdAt).toLocaleString()}</td>
                       <td style={td}>{a.ip || "—"}</td>
-                      <td style={td}>{a.geo?.country ? `${a.geo.country}${a.geo.city ? " / " + a.geo.city : ""}` : "—"}</td>
+                      <td style={td}>
+                        {a.geo?.country ? `${a.geo.country}${a.geo.city ? " / " + a.geo.city : ""}` : "—"}
+                      </td>
                       <td style={td}>{a.success ? "✅" : "❌"}</td>
                       <td style={td}>{a.suspicious ? "⚠️" : "—"}</td>
                       <td style={td}>{typeof a.riskScore === "number" ? a.riskScore : "—"}</td>
-                      <td style={td}>{Array.isArray(a.reasons) && a.reasons.length ? a.reasons.join(", ") : "—"}</td>
+                      <td style={td}>
+                        {Array.isArray(a.reasons) && a.reasons.length ? a.reasons.join(", ") : "—"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

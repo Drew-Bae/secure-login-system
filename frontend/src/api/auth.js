@@ -229,3 +229,7 @@ export function resendEmailVerification(email) {
 export function verifyEmail(token) {
   return api.get("/auth/verify-email", { params: { token } });
 }
+
+export function adminForcePasswordReset(userId, { reason = "", sendEmail = true } = {}) {
+  return api.post(`/admin/users/${userId}/force-password-reset`, { reason, sendEmail });
+}
