@@ -25,6 +25,21 @@ const { loginAttemptTracker } = require("../middleware/loginAttemptTracker");
 const StepUpChallenge = require("../models/StepUpChallenge");
 const { generateToken, hashToken } = require("../utils/stepUpTokens");
 
+function getClientUrlBase() {
+  const single = (process.env.CLIENT_URL || "").trim();
+  if (single) return single.replace(/\/$/, "");
+
+  const list = (process.env.CLIENT_URLS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => s.replace(/\/$/, ""));
+
+  // Prefer a non-localhost URL if present
+  const nonLocal = list.find((u) => !u.includes("localhost") && !u.includes("127.0.0.1"));
+  return nonLocal || list[0] || "http://localhost:3000";
+}
+
 const EMAIL_VERIFY_TTL_HOURS = 24;
 
 async function issueEmailVerification(user) {
@@ -42,7 +57,7 @@ async function issueEmailVerification(user) {
   user.emailVerifyExpiresAt = new Date(Date.now() + EMAIL_VERIFY_TTL_HOURS * 60 * 60 * 1000);
   await user.save();
 
-  const base = process.env.CLIENT_URL || "http://localhost:3000";
+  const base = getClientUrlBase();
   const verifyUrl = `${base}/verify-email?token=${token}`;
 
   try {
