@@ -6,7 +6,8 @@ const LoginAttempt = require("../models/LoginAttempt");
 const router = express.Router();
 const isProduction = process.env.NODE_ENV === "production";
 const crypto = require("crypto");
-const { sendPasswordResetEmail, sendStepUpEmail } = require("../services/emailService");
+const { sendPasswordResetEmail, sendStepUpEmail, sendEmailVerificationEmail } =
+  require("../services/emailService");
 const speakeasy = require("speakeasy");
 const { requireAuth } = require("../middleware/authMiddleware");
 const geoip = require("geoip-lite");
@@ -23,6 +24,35 @@ const { sleep } = require("../utils/sleep");
 const { loginAttemptTracker } = require("../middleware/loginAttemptTracker");
 const StepUpChallenge = require("../models/StepUpChallenge");
 const { generateToken, hashToken } = require("../utils/stepUpTokens");
+
+const EMAIL_VERIFY_TTL_HOURS = 24;
+
+async function issueEmailVerification(user) {
+  // In tests, auto-verify to keep integration tests focused on auth/session behavior.
+  if (process.env.NODE_ENV === "test") {
+    user.emailVerifiedAt = user.emailVerifiedAt || new Date();
+    user.emailVerifyTokenHash = undefined;
+    user.emailVerifyExpiresAt = undefined;
+    await user.save();
+    return { verifyUrl: null };
+  }
+
+  const token = generateToken();
+  user.emailVerifyTokenHash = hashToken(token);
+  user.emailVerifyExpiresAt = new Date(Date.now() + EMAIL_VERIFY_TTL_HOURS * 60 * 60 * 1000);
+  await user.save();
+
+  const base = process.env.CLIENT_URL || "http://localhost:3000";
+  const verifyUrl = `${base}/verify-email?token=${token}`;
+
+  try {
+    await sendEmailVerificationEmail({ to: user.email, verifyUrl });
+  } catch (e) {
+    console.error("sendEmailVerificationEmail failed:", e);
+  }
+
+  return { verifyUrl };
+}
 
 // helper to create JWT (session token)
 function createToken({ user, deviceId, deviceTokenVersion }) {
@@ -142,12 +172,64 @@ router.post("/register", async (req, res) => {
       email,
       password: hashed,
     });
+    await issueEmailVerification(user);
 
     return res
       .status(201)
-      .json({ message: "User registered", userId: user._id });
+      .json({ message: "User registered. Please check your email to verify your account.", userId: user._id });
   } catch (err) {
     console.error("Register error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+// RESEND EMAIL VERIFICATION
+router.post("/resend-verification", async (req, res) => {
+  const genericResponse = {
+    message: "If that email exists, a verification link has been sent.",
+  };
+
+  try {
+    const { email } = req.body || {};
+    if (!email) return res.status(200).json(genericResponse);
+
+    const user = await User.findOne({ email: String(email).toLowerCase().trim() });
+    if (!user) return res.status(200).json(genericResponse);
+
+    if (user.emailVerifiedAt) return res.status(200).json(genericResponse);
+
+    await issueEmailVerification(user);
+    return res.status(200).json(genericResponse);
+  } catch (err) {
+    console.error("Resend verification error:", err);
+    return res.status(200).json(genericResponse);
+  }
+});
+
+// VERIFY EMAIL (token link)
+router.get("/verify-email", async (req, res) => {
+  try {
+    const token = String(req.query?.token || "").trim();
+    if (!token) return res.status(400).json({ message: "Verification token is required" });
+
+    const tokenHash = hashToken(token);
+    const user = await User.findOne({
+      emailVerifyTokenHash: tokenHash,
+      emailVerifyExpiresAt: { $gt: new Date() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: "Verification token is invalid or has expired" });
+    }
+
+    if (!user.emailVerifiedAt) user.emailVerifiedAt = new Date();
+    user.emailVerifyTokenHash = undefined;
+    user.emailVerifyExpiresAt = undefined;
+    await user.save();
+
+    return res.json({ message: "Email verified successfully" });
+  } catch (err) {
+    console.error("Verify email error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 });
@@ -493,6 +575,24 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
         await sleep(calcDelayMs(user.failedLoginCount || 0));
       }
       return res.status(400).json({ message: "Invalid credentials" });
+    }
+
+    if (!user.emailVerifiedAt) {
+      const now = new Date();
+      const hasValidToken =
+        !!user.emailVerifyTokenHash &&
+        !!user.emailVerifyExpiresAt &&
+        user.emailVerifyExpiresAt > now;
+
+      // Avoid spamming: only send a new link if there isn't a valid one on file.
+      if (!hasValidToken) {
+        await issueEmailVerification(user);
+      }
+
+      return res.status(403).json({
+        message: "Please verify your email to continue.",
+        actionRequired: "VERIFY_EMAIL",
+      });
     }
 
     const riskLabel = blockRisk ? "high" : highRisk ? "medium" : "low";
@@ -861,6 +961,8 @@ router.get("/me", requireAuth, async (req, res) => {
     user: {
       id: user._id,
       email: user.email,
+      emailVerified: !!user.emailVerifiedAt,
+      emailVerifiedAt: user.emailVerifiedAt,
       role: user.role,
       mfaEnabled: user.mfaEnabled,
     },

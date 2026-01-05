@@ -31,6 +31,10 @@ const userSchema = new mongoose.Schema(
     resetPasswordTokenHash: { type: String },
     resetPasswordExpiresAt: { type: Date },
     backupCodeHashes: [{ type: String }],
+    // Email verification
+    emailVerifiedAt: { type: Date },
+    emailVerifyTokenHash: { type: String },
+    emailVerifyExpiresAt: { type: Date },
   },
   { timestamps: true }
 );

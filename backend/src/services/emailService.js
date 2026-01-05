@@ -132,4 +132,55 @@ async function sendStepUpEmail({ to, verifyUrl }) {
   return { sent: true };
 }
 
-module.exports = { sendPasswordResetEmail, sendStepUpEmail };
+async function sendEmailVerificationEmail({ to, verifyUrl }) {
+  if (process.env.NODE_ENV === "test") {
+    return { skipped: true };
+  }
+
+  if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) {
+    console.log(`[DEV] Email verification link for ${to}: ${verifyUrl}`);
+    return { skipped: true };
+  }
+
+  const resend = getResendClient();
+  if (!resend) {
+    console.log(`[DEV] Email verification link for ${to}: ${verifyUrl}`);
+    return { skipped: true };
+  }
+
+  const fromEmail = cleanEmail(process.env.EMAIL_FROM);
+  const from = `Secure Login System <${fromEmail}>`;
+
+  await resend.emails.send({
+    from,
+    to,
+    subject: "Verify your email",
+    html: `
+      <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;">
+        <h2>Verify your email</h2>
+        <p>Thanks for creating an account. Please verify your email to continue.</p>
+        <p style="margin: 24px 0;">
+          <a href="${verifyUrl}" style="
+            background:#111;
+            color:#fff;
+            padding:10px 14px;
+            border-radius:8px;
+            text-decoration:none;
+            display:inline-block;
+          ">
+            Verify Email
+          </a>
+        </p>
+        <p>If the button doesn't work, copy and paste this link:</p>
+        <p><a href="${verifyUrl}">${verifyUrl}</a></p>
+        <p style="margin-top:24px;color:#666;">
+          This link expires in 24 hours. If you did not create this account, you can ignore this email.
+        </p>
+      </div>
+    `,
+  });
+
+  return { sent: true };
+}
+
+module.exports = { sendPasswordResetEmail, sendStepUpEmail, sendEmailVerificationEmail };
