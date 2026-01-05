@@ -6,6 +6,8 @@ const TrustedDevice = require("../models/TrustedDevice");
 const { requireAuth, requireAdmin } = require("../middleware/authMiddleware");
 const { writeAudit } = require("../utils/audit");
 const AuditEvent = require("../models/AuditEvent");
+const BlockedIp = require("../models/BlockedIp");
+const { getClientIp } = require("../middleware/blockIpMiddleware");
 
 const router = express.Router();
 
@@ -464,6 +466,42 @@ router.get("/audit/export.csv", requireAuth, requireAdmin, async (req, res) => {
 });
 
 /**
+ * GET /api/admin/blocked-ips
+ * Query:
+ *  - active=true|false (default true)
+ *  - ip (contains)
+ *  - page, limit
+ */
+router.get("/blocked-ips", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { active = "true", ip, page = "1", limit = "50" } = req.query;
+
+    const q = {};
+    if (ip) {
+      const safe = escapeRegex(String(ip).slice(0, 200));
+      q.ip = { $regex: safe, $options: "i" };
+    }
+
+    if (active === "true") q.expiresAt = { $gt: new Date() };
+    if (active === "false") q.expiresAt = { $lte: new Date() };
+
+    const pageNum = Math.max(1, toInt(page, 1));
+    const limitNum = Math.min(200, Math.max(1, toInt(limit, 50)));
+    const skip = (pageNum - 1) * limitNum;
+
+    const [total, blocks] = await Promise.all([
+      BlockedIp.countDocuments(q),
+      BlockedIp.find(q).sort({ expiresAt: -1 }).skip(skip).limit(limitNum),
+    ]);
+
+    res.json({ blocks, page: pageNum, limit: limitNum, total, hasMore: skip + blocks.length < total });
+  } catch (err) {
+    console.error("Admin blocked-ips list error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+/**
  * POST /api/admin/users/:id/unlock
  */
 router.post("/users/:id/unlock", requireAuth, requireAdmin, async (req, res) => {
@@ -609,6 +647,78 @@ router.post("/devices/:deviceRecordId/compromised", requireAuth, requireAdmin, a
     res.json({ ok: true, compromisedAt: device.compromisedAt });
   } catch (err) {
     console.error("Admin device compromised error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+/**
+ * POST /api/admin/blocked-ips
+ * body: { ip: string, minutes: number, reason?: string }
+ */
+router.post("/blocked-ips", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const ip = String(req.body?.ip || "").trim();
+    if (!ip) return res.status(400).json({ message: "ip is required" });
+
+    const minutes = Math.min(7 * 24 * 60, Math.max(1, toInt(req.body?.minutes, 60)));
+    const expiresAt = new Date(Date.now() + minutes * 60 * 1000);
+    const reason = String(req.body?.reason || "").trim().slice(0, 500);
+
+    // Optional guard: prevent you from bricking yourself in local dev
+    const requesterIp = getClientIp(req);
+    if (ip === requesterIp) {
+      return res.status(400).json({ message: "Refusing to block your current IP." });
+    }
+
+    const doc = await BlockedIp.findOneAndUpdate(
+      { ip },
+      {
+        $set: {
+          ip,
+          expiresAt,
+          reason,
+          createdByUserId: req.user?._id,
+        },
+      },
+      { upsert: true, new: true }
+    );
+
+    await writeAudit(req, {
+      action: "ADMIN_BLOCK_IP",
+      meta: { ip, minutes, expiresAt: expiresAt.toISOString(), reason },
+    });
+
+    res.json({ ok: true, blocked: doc });
+  } catch (err) {
+    if (err?.code === 11000) {
+      return res.status(409).json({ message: "IP is already blocked" });
+    }
+    console.error("Admin block ip error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+/**
+ * DELETE /api/admin/blocked-ips/:id
+ */
+router.delete("/blocked-ips/:id", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: "Invalid block id" });
+
+    const doc = await BlockedIp.findById(id);
+    if (!doc) return res.status(404).json({ message: "Not found" });
+
+    await BlockedIp.deleteOne({ _id: id });
+
+    await writeAudit(req, {
+      action: "ADMIN_UNBLOCK_IP",
+      meta: { ip: doc.ip, reason: doc.reason || "" },
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Admin unblock error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });

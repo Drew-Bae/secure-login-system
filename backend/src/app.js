@@ -12,6 +12,7 @@ const deviceRoutes = require("./routes/deviceRoutes");
 
 const { authLimiter } = require("./middleware/rateLimit");
 const { csrfProtect } = require("./middleware/csrf");
+const { blockIpMiddleware } = require("./middleware/blockIpMiddleware");
 
 const app = express();
 
@@ -74,6 +75,9 @@ app.get("/", (req, res) => {
 
 // Rate limiting for auth routes
 app.use("/api/auth", authLimiter);
+
+// Block IP
+app.use(blockIpMiddleware);
 
 // Routes
 app.use("/api/auth", authRoutes);
