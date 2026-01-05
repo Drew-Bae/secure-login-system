@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { sendStepUpEmail, resendEmailVerification } from "../api/auth";
+import { sendStepUpEmail, resendEmailVerification, forgotPassword } from "../api/auth";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -21,12 +21,38 @@ export default function Login() {
   const [resendLoading, setResendLoading] = useState(false);
   const [resendMsg, setResendMsg] = useState("");
 
+  // Reset password
+  const [resetRequired, setResetRequired] = useState(false);
+  const [resetMsg, setResetMsg] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetSentMsg, setResetSentMsg] = useState("");
+
+
   // If the user edits the email, clear verification/resend messages
   useEffect(() => {
     setVerifyRequired(false);
     setVerifyMsg("");
     setResendMsg("");
+    setResetRequired(false);
+    setResetMsg("");
+    setResetSentMsg("");
   }, [email]);
+
+  async function handleSendResetEmail() {
+  if (!email) return;
+
+  setResetLoading(true);
+  setResetSentMsg("");
+
+  try {
+    const res = await forgotPassword(email);
+    setResetSentMsg(res.data?.message || "If that email exists, a reset link has been sent.");
+  } catch (err) {
+    setResetSentMsg(err.response?.data?.message || "Could not send reset email.");
+  } finally {
+    setResetLoading(false);
+  }
+}
 
   async function handleResendVerification() {
     if (!email) return;
@@ -115,6 +141,14 @@ export default function Login() {
         return;
       }
 
+      // ✅ Forced password reset required
+      if (code === 403 && data?.actionRequired === "FORCE_PASSWORD_RESET") {
+        setResetRequired(true);
+        setResetMsg(data?.message || "Password reset required.");
+        setStatus({ type: "error", message: data?.message || "Password reset required." });
+        return;
+      }
+
       // Risk-based block when MFA is not enabled
       if (code === 403 && data?.actionRequired === "ENABLE_MFA") {
         setStatus({ type: "error", message: `${data.message} (Risk: ${data.riskScore})` });
@@ -194,6 +228,24 @@ export default function Login() {
           </button>
 
           {resendMsg && <p style={{ marginTop: 8 }}>{resendMsg}</p>}
+        </div>
+      )}
+
+      {/* ✅ FORCE RESET PANEL */}
+      {resetRequired && (
+        <div style={{ marginTop: 16, maxWidth: 420 }}>
+          <p style={{ color: "crimson" }}>{resetMsg}</p>
+
+          <button
+            type="button"
+            onClick={handleSendResetEmail}
+            disabled={resetLoading || !email}
+            style={{ marginTop: 8, padding: "8px 12px" }}
+          >
+            {resetLoading ? "Sending..." : "Send password reset email"}
+          </button>
+
+          {resetSentMsg && <p style={{ marginTop: 8 }}>{resetSentMsg}</p>}
         </div>
       )}
     </div>
