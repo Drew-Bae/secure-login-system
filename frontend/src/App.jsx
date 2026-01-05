@@ -17,6 +17,7 @@ import AdminUsers from "./pages/AdminUsers";
 import AdminUserDetail from "./pages/AdminUserDetail";
 import AdminAuditLog from "./pages/AdminAuditLog";
 import AdminBlockedIps from "./pages/AdminBlockedIps";
+import VerifyEmail from "./pages/VerifyEmail";
 
 export default function App() {
   return (
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/mfa-verify" element={<MfaVerify />} />
           <Route path="/step-up/verify" element={<StepUpVerify />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
 
           {/* Authenticated routes */}
           <Route

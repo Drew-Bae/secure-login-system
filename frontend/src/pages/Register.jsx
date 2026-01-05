@@ -1,11 +1,16 @@
 import { useState } from "react";
-import { registerUser } from "../api/auth";
+import { registerUser, resendEmailVerification } from "../api/auth";
 
 export default function Register() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [showVerifyPrompt, setShowVerifyPrompt] = useState(false);
+  const [verifyMsg, setVerifyMsg] = useState("");
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMsg, setResendMsg] = useState("");
+
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -15,14 +20,35 @@ export default function Register() {
     try {
       const res = await registerUser({ email, password });
       setStatus({ type: "success", message: res.data.message || "Registered" });
-      setEmail("");
       setPassword("");
+      setShowVerifyPrompt(true);
+      setVerifyMsg("Account created. Please verify your email before logging in.");
+      setResendMsg(""); 
     } catch (err) {
-      const message =
-        err.response?.data?.message || "Registration failed. Try again.";
+      setShowVerifyPrompt(false);
+      setVerifyMsg("");
+      setResendMsg("");
+
+      const message = err.response?.data?.message || "Registration failed. Try again.";
       setStatus({ type: "error", message });
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleResendVerification() {
+    if (!email) return;
+
+    setResendLoading(true);
+    setResendMsg("");
+
+    try {
+      const res = await resendEmailVerification(email);
+      setResendMsg(res.data?.message || "Verification email sent.");
+    } catch (err) {
+      setResendMsg(err.response?.data?.message || "Could not resend verification email.");
+    } finally {
+      setResendLoading(false);
     }
   }
 
@@ -35,7 +61,12 @@ export default function Register() {
           <input
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setShowVerifyPrompt(false);
+              setVerifyMsg("");
+              setResendMsg("");
+            }}
             required
             style={{ display: "block", width: "100%", marginTop: 4 }}
           />
@@ -61,6 +92,23 @@ export default function Register() {
           {loading ? "Creating..." : "Register"}
         </button>
       </form>
+
+      {showVerifyPrompt && (
+        <div style={{ marginTop: 16 }}>
+          <p>{verifyMsg}</p>
+
+          <button
+            type="button"
+            onClick={handleResendVerification}
+            disabled={resendLoading || !email}
+            style={{ padding: "8px 12px" }}
+          >
+            {resendLoading ? "Sending..." : "Resend verification email"}
+          </button>
+
+          {resendMsg && <p style={{ marginTop: 8 }}>{resendMsg}</p>}
+        </div>
+      )}
 
       {status && (
         <p

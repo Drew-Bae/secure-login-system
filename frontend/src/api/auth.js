@@ -221,3 +221,11 @@ export function fetchBlockedIps(params = {}) {
 export function adminUnblockIp(blockId) {
   return api.delete(`/admin/blocked-ips/${blockId}`);
 }
+
+export function resendEmailVerification(email) {
+  return api.post("/auth/resend-verification", { email });
+}
+
+export function verifyEmail(token) {
+  return api.get("/auth/verify-email", { params: { token } });
+}

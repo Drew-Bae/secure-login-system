@@ -1,8 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { sendStepUpEmail } from "../api/auth";
-
+import { sendStepUpEmail, resendEmailVerification } from "../api/auth";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -16,11 +15,46 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [showEnableMfaLink, setShowEnableMfaLink] = useState(false);
 
+  // Email verification UI
+  const [verifyRequired, setVerifyRequired] = useState(false);
+  const [verifyMsg, setVerifyMsg] = useState("");
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMsg, setResendMsg] = useState("");
+
+  // If the user edits the email, clear verification/resend messages
+  useEffect(() => {
+    setVerifyRequired(false);
+    setVerifyMsg("");
+    setResendMsg("");
+  }, [email]);
+
+  async function handleResendVerification() {
+    if (!email) return;
+
+    setResendLoading(true);
+    setResendMsg("");
+
+    try {
+      const res = await resendEmailVerification(email);
+      setResendMsg(res.data?.message || "Verification email sent.");
+    } catch (err) {
+      setResendMsg(err.response?.data?.message || "Could not resend verification email.");
+    } finally {
+      setResendLoading(false);
+    }
+  }
+
   async function handleLogin(e) {
     e.preventDefault();
+
     setLoading(true);
     setStatus(null);
     setShowEnableMfaLink(false);
+
+    // Clear any previous verify-required UI for a fresh attempt
+    setVerifyRequired(false);
+    setVerifyMsg("");
+    setResendMsg("");
 
     try {
       const res = await login({ email, password });
@@ -73,6 +107,14 @@ export default function Login() {
       const code = err.response?.status;
       const data = err.response?.data;
 
+      // ✅ Email verification required
+      if (code === 403 && data?.actionRequired === "VERIFY_EMAIL") {
+        setVerifyRequired(true);
+        setVerifyMsg(data?.message || "Please verify your email to continue.");
+        setStatus({ type: "error", message: data?.message || "Please verify your email to continue." });
+        return;
+      }
+
       // Risk-based block when MFA is not enabled
       if (code === 403 && data?.actionRequired === "ENABLE_MFA") {
         setStatus({ type: "error", message: `${data.message} (Risk: ${data.riskScore})` });
@@ -80,7 +122,7 @@ export default function Login() {
         return;
       }
 
-      const message = err.response?.data?.message || "Login failed. Check your credentials.";
+      const message = data?.message || "Login failed. Check your credentials.";
       setStatus({ type: "error", message });
     } finally {
       setLoading(false);
@@ -135,6 +177,24 @@ export default function Login() {
             </p>
           )}
         </>
+      )}
+
+      {/* ✅ VERIFY EMAIL PANEL */}
+      {verifyRequired && (
+        <div style={{ marginTop: 16, maxWidth: 420 }}>
+          <p style={{ color: "crimson" }}>{verifyMsg}</p>
+
+          <button
+            type="button"
+            onClick={handleResendVerification}
+            disabled={resendLoading || !email}
+            style={{ marginTop: 8, padding: "8px 12px" }}
+          >
+            {resendLoading ? "Sending..." : "Resend verification email"}
+          </button>
+
+          {resendMsg && <p style={{ marginTop: 8 }}>{resendMsg}</p>}
+        </div>
       )}
     </div>
   );
