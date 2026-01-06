@@ -233,3 +233,8 @@ export function verifyEmail(token) {
 export function adminForcePasswordReset(userId, { reason = "", sendEmail = true } = {}) {
   return api.post(`/admin/users/${userId}/force-password-reset`, { reason, sendEmail });
 }
+
+// POST /api/auth/change-password
+export function changePassword({ currentPassword, newPassword }) {
+  return api.post("/auth/change-password", { currentPassword, newPassword });
+}

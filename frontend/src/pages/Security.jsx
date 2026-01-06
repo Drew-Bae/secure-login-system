@@ -5,6 +5,7 @@ import {
   trustDevice,
   getCurrentDeviceId,
   logoutAllDevices,
+  changePassword, // ✅ add
 } from "../api/auth";
 
 const LAST_LOGIN_META_KEY = "sls_last_login_meta";
@@ -25,6 +26,12 @@ export default function Security() {
   const [status, setStatus] = useState(null);
 
   const [actionStatus, setActionStatus] = useState(null);
+
+  // ✅ Change password state
+  const [pwCurrent, setPwCurrent] = useState("");
+  const [pwNew, setPwNew] = useState("");
+  const [pwConfirm, setPwConfirm] = useState("");
+  const [pwStatus, setPwStatus] = useState(null);
 
   const lastLoginMeta = useMemo(() => readLastLoginMeta(), []);
 
@@ -102,6 +109,41 @@ export default function Security() {
     }
   }
 
+  // ✅ Change password handler
+  async function handleChangePassword(e) {
+    e.preventDefault();
+    setPwStatus(null);
+
+    if (!pwCurrent || !pwNew || !pwConfirm) {
+      setPwStatus({ type: "error", message: "Fill out all password fields." });
+      return;
+    }
+
+    if (pwNew !== pwConfirm) {
+      setPwStatus({ type: "error", message: "New passwords do not match." });
+      return;
+    }
+
+    try {
+      const res = await changePassword({ currentPassword: pwCurrent, newPassword: pwNew });
+      setPwStatus({
+        type: "success",
+        message: res.data?.message || "Password changed. Redirecting...",
+      });
+
+      setPwCurrent("");
+      setPwNew("");
+      setPwConfirm("");
+
+      // backend clears cookie, so send them to login
+      setTimeout(() => {
+        window.location.href = "/login";
+      }, 800);
+    } catch (err) {
+      const msg = err.response?.data?.message || "Failed to change password.";
+      setPwStatus({ type: "error", message: msg });
+    }
+  }
 
   useEffect(() => {
     load();
@@ -205,6 +247,7 @@ export default function Security() {
               <strong>MFA Enabled:</strong> {me.mfaEnabled ? "Yes" : "No"}
             </li>
           </ul>
+
           <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button
               type="button"
@@ -213,6 +256,53 @@ export default function Security() {
             >
               Log out of all devices
             </button>
+          </div>
+
+          {/* ✅ Change password */}
+          <div style={{ marginTop: 18, paddingTop: 12, borderTop: "1px solid #eee" }}>
+            <h3 style={{ marginBottom: 8 }}>Change password</h3>
+
+            <form onSubmit={handleChangePassword} style={{ maxWidth: 360 }}>
+              <label style={{ display: "block", marginTop: 8 }}>
+                Current password
+                <input
+                  type="password"
+                  value={pwCurrent}
+                  onChange={(e) => setPwCurrent(e.target.value)}
+                  style={{ width: "100%", padding: "8px 10px", marginTop: 4 }}
+                />
+              </label>
+
+              <label style={{ display: "block", marginTop: 10 }}>
+                New password
+                <input
+                  type="password"
+                  value={pwNew}
+                  onChange={(e) => setPwNew(e.target.value)}
+                  style={{ width: "100%", padding: "8px 10px", marginTop: 4 }}
+                />
+              </label>
+
+              <label style={{ display: "block", marginTop: 10 }}>
+                Confirm new password
+                <input
+                  type="password"
+                  value={pwConfirm}
+                  onChange={(e) => setPwConfirm(e.target.value)}
+                  style={{ width: "100%", padding: "8px 10px", marginTop: 4 }}
+                />
+              </label>
+
+              <button type="submit" style={{ marginTop: 12, padding: "8px 12px" }}>
+                Change password
+              </button>
+
+              {pwStatus && (
+                <p style={{ marginTop: 10, color: pwStatus.type === "error" ? "crimson" : "green" }}>
+                  {pwStatus.message}
+                </p>
+              )}
+            </form>
           </div>
         </div>
       )}
