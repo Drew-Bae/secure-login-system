@@ -1,9 +1,17 @@
 import { useEffect, useState } from "react";
-import { fetchLoginAttempts, adminBlockIp } from "../api/auth";
+import { fetchAdminLoginAttempts, adminBlockIp } from "../api/auth";
 
 export default function AdminLoginAttempts() {
   const [attempts, setAttempts] = useState([]);
+
+  // filters
   const [onlySuspicious, setOnlySuspicious] = useState(true);
+  const [email, setEmail] = useState("");
+  const [ip, setIp] = useState("");
+  const [success, setSuccess] = useState(""); // "", "true", "false"
+  const [minRisk, setMinRisk] = useState("");
+  const [maxRisk, setMaxRisk] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null);
 
@@ -12,8 +20,7 @@ export default function AdminLoginAttempts() {
     setStatus(null);
     try {
       await fn();
-      // refresh after action so you see latest attempts
-      await loadAttempts({ onlySuspicious });
+      await loadAttempts();
       setStatus({ type: "ok", message: "Action completed." });
     } catch (err) {
       const msg = err.response?.data?.message || "Action failed.";
@@ -23,14 +30,25 @@ export default function AdminLoginAttempts() {
     }
   }
 
-  async function loadAttempts(options = {}) {
+  async function loadAttempts() {
     setLoading(true);
     setStatus(null);
 
     try {
-      const res = await fetchLoginAttempts({
-        onlySuspicious: options.onlySuspicious ?? onlySuspicious,
-      });
+      const params = {
+        onlySuspicious: onlySuspicious ? "true" : undefined,
+        email: email || undefined,
+        ip: ip || undefined,
+        success: success || undefined,
+        minRisk: minRisk !== "" ? Number(minRisk) : undefined,
+        maxRisk: maxRisk !== "" ? Number(maxRisk) : undefined,
+
+        // keep it simple for now
+        page: 1,
+        limit: 100,
+      };
+
+      const res = await fetchAdminLoginAttempts(params);
       setAttempts(res.data.attempts || []);
     } catch (err) {
       const code = err.response?.status;
@@ -51,35 +69,91 @@ export default function AdminLoginAttempts() {
   }
 
   useEffect(() => {
-    loadAttempts({ onlySuspicious });
+    loadAttempts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onlySuspicious]);
+  }, []);
 
   return (
     <div style={{ padding: 24, fontFamily: "system-ui" }}>
       <h1>Admin – Login Attempts</h1>
       <p style={{ marginBottom: 16 }}>
-        This view shows recent login attempts with basic suspicious login
-        detection.
+        Filter login attempts by email, IP, success/fail, and risk score.
       </p>
 
-      <div style={{ marginBottom: 16 }}>
+      {/* Filters */}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
         <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
           <input
             type="checkbox"
             checked={onlySuspicious}
             onChange={(e) => setOnlySuspicious(e.target.checked)}
           />
-          Show only suspicious attempts
+          Only suspicious
         </label>
+
+        <input
+          placeholder="Email contains"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          style={{ padding: "8px 10px", minWidth: 220 }}
+        />
+
+        <input
+          placeholder="IP"
+          value={ip}
+          onChange={(e) => setIp(e.target.value)}
+          style={{ padding: "8px 10px", minWidth: 160 }}
+        />
+
+        <select
+          value={success}
+          onChange={(e) => setSuccess(e.target.value)}
+          style={{ padding: "8px 10px" }}
+        >
+          <option value="">Success: Any</option>
+          <option value="true">Success only</option>
+          <option value="false">Failures only</option>
+        </select>
+
+        <input
+          placeholder="Min risk"
+          value={minRisk}
+          onChange={(e) => setMinRisk(e.target.value)}
+          style={{ padding: "8px 10px", width: 110 }}
+        />
+
+        <input
+          placeholder="Max risk"
+          value={maxRisk}
+          onChange={(e) => setMaxRisk(e.target.value)}
+          style={{ padding: "8px 10px", width: 110 }}
+        />
 
         <button
           type="button"
-          onClick={() => loadAttempts({ onlySuspicious })}
+          onClick={loadAttempts}
           disabled={loading}
-          style={{ marginLeft: 16, padding: "6px 12px" }}
+          style={{ padding: "8px 12px" }}
         >
-          {loading ? "Refreshing..." : "Refresh"}
+          {loading ? "Loading..." : "Apply"}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setOnlySuspicious(true);
+            setEmail("");
+            setIp("");
+            setSuccess("");
+            setMinRisk("");
+            setMaxRisk("");
+            // load with defaults immediately
+            setTimeout(() => loadAttempts(), 0);
+          }}
+          disabled={loading}
+          style={{ padding: "8px 12px" }}
+        >
+          Clear
         </button>
       </div>
 
@@ -98,25 +172,16 @@ export default function AdminLoginAttempts() {
         <p>No login attempts to display.</p>
       ) : (
         <div style={{ overflowX: "auto" }}>
-          <table
-            style={{
-              borderCollapse: "collapse",
-              minWidth: 700,
-              fontSize: 14,
-            }}
-          >
+          <table style={{ borderCollapse: "collapse", minWidth: 900, fontSize: 14 }}>
             <thead>
               <tr>
                 <th style={thStyle}>Time</th>
                 <th style={thStyle}>Email</th>
                 <th style={thStyle}>IP</th>
                 <th style={thStyle}>Country/City</th>
-                <th style={thStyle}>User Agent</th>
-                <th style={thStyle}>Device</th>
                 <th style={thStyle}>Success</th>
                 <th style={thStyle}>Suspicious</th>
                 <th style={thStyle}>Risk</th>
-                <th style={thStyle}>Raw Risk</th>
                 <th style={thStyle}>Reasons</th>
                 <th style={thStyle}>Response</th>
               </tr>
@@ -124,56 +189,24 @@ export default function AdminLoginAttempts() {
             <tbody>
               {attempts.map((a) => (
                 <tr key={a._id}>
-                  <td style={tdStyle}>
-                    {new Date(a.createdAt).toLocaleString()}
-                  </td>
+                  <td style={tdStyle}>{new Date(a.createdAt).toLocaleString()}</td>
                   <td style={tdStyle}>{a.email}</td>
                   <td style={tdStyle}>{a.ip || "-"}</td>
                   <td style={tdStyle}>
                     {a.geo?.country ? `${a.geo.country}${a.geo.city ? " / " + a.geo.city : ""}` : "-"}
                   </td>
+                  <td style={tdStyle}>{a.success ? "✅" : "❌"}</td>
+                  <td style={tdStyle}>{a.suspicious ? "⚠️ Yes" : "No"}</td>
+                  <td style={tdStyle}>{typeof a.riskScore === "number" ? a.riskScore : "-"}</td>
                   <td style={tdStyle}>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        maxWidth: 250,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                      title={a.userAgent}
-                    >
-                      {a.userAgent || "-"}
-                    </span>
-                  </td>
-                  <td style={tdStyle}>
-                    {a.deviceId && a.deviceId !== "unknown" ? a.deviceId.slice(0, 8) : "-"}
-                  </td>
-                  <td style={tdStyle}>
-                    {a.success ? "✅" : "❌"}
-                  </td>
-                  <td style={tdStyle}>
-                    {a.suspicious ? "⚠️ Yes" : "No"}
-                  </td>
-                  <td style={tdStyle}>
-                    {typeof a.riskScore === "number" ? a.riskScore : "-"}
-                  </td>
-                  <td style={tdStyle}>
-                    {typeof a.rawRiskScore === "number" ? a.rawRiskScore : "-"}
-                  </td>
-                  <td style={tdStyle}>
-                    {Array.isArray(a.reasons) && a.reasons.length > 0
-                      ? a.reasons.join(", ")
-                      : "-"}
+                    {Array.isArray(a.reasons) && a.reasons.length > 0 ? a.reasons.join(", ") : "-"}
                   </td>
                   <td style={tdStyle}>
                     <button
                       type="button"
                       onClick={async () => {
-                        // 1) validate IP exists
                         if (!a.ip || a.ip === "-") return;
 
-                        // 2) prompt minutes
                         const minutesRaw = window.prompt("Block how many minutes?", "60");
                         if (!minutesRaw) return;
 
@@ -183,10 +216,7 @@ export default function AdminLoginAttempts() {
                           return;
                         }
 
-                        // 3) prompt reason (optional)
                         const reason = window.prompt("Reason (optional):", "Suspicious activity") || "";
-
-                        // 4) call backend using your doAction wrapper
                         await doAction(() => adminBlockIp(a.ip, minutes, reason));
                       }}
                       disabled={!a.ip || loading}
@@ -195,7 +225,6 @@ export default function AdminLoginAttempts() {
                       Block IP
                     </button>
                   </td>
-
                 </tr>
               ))}
             </tbody>
