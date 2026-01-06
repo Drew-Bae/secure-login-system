@@ -110,7 +110,7 @@ router.post("/verify", requireAuth, async (req, res) => {
     await user.save();
 
     return res.json({
-      message: "MFA enabled successfully. Save your backup codes الآن — you won’t be able to view them again.",
+      message: "MFA enabled successfully. Save your backup codes now — you won’t be able to view them again.",
       backupCodes, // null if already existed
     });
 
