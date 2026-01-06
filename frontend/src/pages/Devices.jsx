@@ -5,6 +5,7 @@ import {
   revokeDevice,
   markDeviceCompromised,
   getCurrentDeviceId,
+  logoutUser,
 } from "../api/auth";
 
 export default function Devices() {
@@ -44,6 +45,14 @@ export default function Devices() {
 
     try {
       await revokeDevice(deviceId);
+
+      // ✅ If you revoked THIS device, clear cookie and force re-login
+      if (deviceId === currentDeviceId) {
+        await logoutUser(); // clears auth cookie
+        window.location.href = "/login";
+        return;
+      }
+
       setStatus({ type: "success", message: "Device session revoked." });
       await load();
     } catch (err) {
@@ -59,13 +68,20 @@ export default function Devices() {
 
     try {
       await markDeviceCompromised(deviceId, reason || "user_marked_compromised");
+
+      // ✅ If you compromised THIS device, clear cookie and force re-login
+      if (deviceId === currentDeviceId) {
+        await logoutUser(); // clears auth cookie
+        window.location.href = "/login";
+        return;
+      }
+
       setStatus({ type: "success", message: "Device marked compromised and revoked." });
       await load();
     } catch (err) {
       setStatus({ type: "error", message: "Failed to mark device compromised." });
     }
   }
-
 
   useEffect(() => {
     load();
