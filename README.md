@@ -22,6 +22,10 @@ This account allows access to:
 - IP and User-Agent metadata
 - Detection reasons (multiple failures, new IP, etc.)
 
+## Documentation
+- [Demo flow (reviewer guide)](docs/DEMO_FLOW.md)
+- [API reference](docs/API.md)
+
 ## Current Phase 3 (In Progress)
 ### **Advanced Suspicious Login Detection**
 - More advanced heuristics (geo-based “impossible travel”)  
