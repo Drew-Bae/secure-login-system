@@ -24,6 +24,7 @@ const { sleep } = require("../utils/sleep");
 const { loginAttemptTracker } = require("../middleware/loginAttemptTracker");
 const StepUpChallenge = require("../models/StepUpChallenge");
 const { generateToken, hashToken } = require("../utils/stepUpTokens");
+const { writeAudit } = require("../utils/audit");
 
 function getClientUrlBase() {
   const single = (process.env.CLIENT_URL || "").trim();
@@ -342,6 +343,62 @@ router.post("/reset-password", async (req, res) => {
     return res.json({ message: "Password reset successful" });
   } catch (err) {
     console.error("Reset password error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+// POST /api/auth/change-password
+// - requires current password
+// - updates password
+// - revokes all sessions (tokenVersion++)
+// - clears auth cookie so user re-auths immediately
+router.post("/change-password", requireAuth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: "Current password and new password are required." });
+    }
+
+    // Keep it simple (you can upgrade to zxcvbn later)
+    if (String(newPassword).length < 8) {
+      return res.status(400).json({ message: "New password must be at least 8 characters." });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const ok = await bcrypt.compare(currentPassword, user.password);
+    if (!ok) {
+      return res.status(400).json({ message: "Current password is incorrect." });
+    }
+
+    // prevent no-op change
+    const same = await bcrypt.compare(newPassword, user.password);
+    if (same) {
+      return res.status(400).json({ message: "New password must be different from your current password." });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+
+    // Revoke sessions after password change
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
+
+    await user.save();
+
+    // Best-effort audit log (don’t block user if audit fails)
+    writeAudit(req, {
+      action: "password_change",
+      targetUserId: user._id,
+      meta: { revokedAllSessions: true },
+    }).catch(() => {});
+
+    // Clear this browser session immediately
+    res.clearCookie("token", authCookieClearOptions());
+
+    return res.json({ message: "Password changed. Please log in again." });
+  } catch (err) {
+    console.error("Change password error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 });
