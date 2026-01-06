@@ -26,6 +26,13 @@ This account allows access to:
 - [Demo flow (reviewer guide)](docs/DEMO_FLOW.md)
 - [API reference](docs/API.md)
 
+## Screenshots
+![Login](docs/screenshots/login.png)
+![Devices](docs/screenshots/devices.png)
+![Admin Audit](docs/screenshots/admin-audit.png)
+![Login Attempts](docs/screenshots/admin-login-attempts.png)
+![Blocked IPs](docs/screenshots/blocked-ips.png)
+
 ## Project Status
 Feature-complete for portfolio/demo purposes ✅
 
