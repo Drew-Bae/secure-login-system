@@ -183,7 +183,7 @@ export default function AdminUserDetail() {
                   );
                   if (!ok) return;
 
-                  await adminForcePasswordReset(user._id, forceReason);
+                  await adminForcePasswordReset(user._id, { reason: forceReason, sendEmail: true });
                   setForceReason("");
                 })
               }
