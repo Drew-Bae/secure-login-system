@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   fetchDevices,
   trustDevice,
@@ -12,7 +12,14 @@ export default function Devices() {
   const [devices, setDevices] = useState([]);
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
-  const currentDeviceId = getCurrentDeviceId();
+
+  const currentDeviceId = useMemo(() => {
+    try {
+      return getCurrentDeviceId();
+    } catch {
+      return null;
+    }
+  }, []);
 
   async function load() {
     setLoading(true);
@@ -46,9 +53,9 @@ export default function Devices() {
     try {
       await revokeDevice(deviceId);
 
-      // ✅ If you revoked THIS device, clear cookie and force re-login
+      // If you revoked THIS device, clear cookie and force re-login
       if (deviceId === currentDeviceId) {
-        await logoutUser(); // clears auth cookie
+        await logoutUser();
         window.location.href = "/login";
         return;
       }
@@ -62,6 +69,13 @@ export default function Devices() {
 
   async function handleCompromised(deviceId) {
     setStatus(null);
+
+    const already = devices.find((d) => d.deviceId === deviceId)?.compromisedAt;
+    if (already) {
+      setStatus({ type: "error", message: "That device is already marked compromised." });
+      return;
+    }
+
     const reason = window.prompt("Reason (optional):", "lost_device");
     const ok = window.confirm("Mark this device compromised and revoke it?");
     if (!ok) return;
@@ -69,9 +83,9 @@ export default function Devices() {
     try {
       await markDeviceCompromised(deviceId, reason || "user_marked_compromised");
 
-      // ✅ If you compromised THIS device, clear cookie and force re-login
+      // If you compromised THIS device, clear cookie and force re-login
       if (deviceId === currentDeviceId) {
-        await logoutUser(); // clears auth cookie
+        await logoutUser();
         window.location.href = "/login";
         return;
       }
@@ -103,7 +117,7 @@ export default function Devices() {
       )}
 
       <div style={{ marginTop: 16, overflowX: "auto" }}>
-        <table style={{ borderCollapse: "collapse", minWidth: 900, fontSize: 14 }}>
+        <table style={{ borderCollapse: "collapse", minWidth: 980, fontSize: 14 }}>
           <thead>
             <tr>
               <th style={th}>Device</th>
@@ -113,71 +127,127 @@ export default function Devices() {
               <th style={th}>Location</th>
               <th style={th}>IP</th>
               <th style={th}>User Agent</th>
-              <th style={th}>Action</th>
+              <th style={th}>Actions</th>
             </tr>
           </thead>
+
           <tbody>
-            {devices.map((d) => (
-              <tr key={d._id}>
-                <td style={td}>
-                  {d.deviceId ? (
-                    <>
-                      {d.deviceId.slice(0, 8)}
-                      {currentDeviceId === d.deviceId ? (
-                        <span style={{ marginLeft: 8, opacity: 0.7 }}>(this device)</span>
-                      ) : null}
-                    </>
-                  ) : (
-                    "-"
-                  )}
-                </td>
-                <td style={td}>{d.compromisedAt ? "⚠️" : "—"}</td>
-                <td style={td}>{d.trusted ? "✅" : "❌"}</td>
-                <td style={td}>{d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : "-"}</td>
-                <td style={td}>
-                  {d.lastGeo?.country
-                    ? `${d.lastGeo.country}${d.lastGeo.city ? " / " + d.lastGeo.city : ""}`
-                    : "-"}
-                </td>
-                <td style={td}>{d.lastIp || "-"}</td>
-                <td style={td}>
-                  <span
-                    style={{
-                      display: "inline-block",
-                      maxWidth: 320,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                    title={d.lastUserAgent}
-                  >
-                    {d.lastUserAgent || "-"}
-                  </span>
-                </td>
-                <td style={td}>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    {d.trusted ? (
-                      <span style={{ opacity: 0.7 }}>Trusted</span>
+            {devices.map((d) => {
+              const isThisDevice = currentDeviceId && d.deviceId === currentDeviceId;
+              const isCompromised = Boolean(d.compromisedAt);
+              const compromisedText = isCompromised
+                ? `${new Date(d.compromisedAt).toLocaleString()}${
+                    d.compromisedReason ? ` — ${d.compromisedReason}` : ""
+                  }`
+                : "";
+
+              return (
+                <tr key={d._id}>
+                  <td style={td}>
+                    {d.deviceId ? (
+                      <>
+                        {d.deviceId.slice(0, 8)}
+                        {isThisDevice ? (
+                          <span style={{ marginLeft: 8, opacity: 0.7 }}>(this device)</span>
+                        ) : null}
+                      </>
                     ) : (
-                      <button onClick={() => handleTrust(d.deviceId)} style={{ padding: "4px 10px" }}>
-                        Trust
-                      </button>
+                      "-"
                     )}
+                  </td>
 
-                    <button onClick={() => handleRevoke(d.deviceId)} style={{ padding: "4px 10px" }}>
-                      Revoke
-                    </button>
+                  <td style={td} title={compromisedText}>
+                    {isCompromised ? (
+                      <span>
+                        ⚠️ {new Date(d.compromisedAt).toLocaleDateString()}
+                        {d.compromisedReason ? (
+                          <span style={{ marginLeft: 6, opacity: 0.7 }}>({d.compromisedReason})</span>
+                        ) : null}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
 
-                    <button onClick={() => handleCompromised(d.deviceId)} style={{ padding: "4px 10px" }}>
-                      Compromised
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                  <td style={td}>
+                    {isCompromised ? (
+                      <span title="Compromised devices cannot be trusted">🚫</span>
+                    ) : d.trusted ? (
+                      "✅"
+                    ) : (
+                      "❌"
+                    )}
+                  </td>
+
+                  <td style={td}>{d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : "-"}</td>
+
+                  <td style={td}>
+                    {d.lastGeo?.country
+                      ? `${d.lastGeo.country}${d.lastGeo.city ? " / " + d.lastGeo.city : ""}`
+                      : "-"}
+                  </td>
+
+                  <td style={td}>{d.lastIp || "-"}</td>
+
+                  <td style={td}>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        maxWidth: 320,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                      title={d.lastUserAgent}
+                    >
+                      {d.lastUserAgent || "-"}
+                    </span>
+                  </td>
+
+                  <td style={td}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                      {/* Trust */}
+                      {isCompromised ? (
+                        <span style={{ opacity: 0.6 }} title="Compromised devices cannot be trusted">
+                          Trust disabled
+                        </span>
+                      ) : d.trusted ? (
+                        <span style={{ opacity: 0.7 }}>Trusted</span>
+                      ) : (
+                        <button
+                          onClick={() => handleTrust(d.deviceId)}
+                          style={{ padding: "4px 10px" }}
+                        >
+                          Trust
+                        </button>
+                      )}
+
+                      {/* Revoke */}
+                      <button
+                        onClick={() => handleRevoke(d.deviceId)}
+                        style={{ padding: "4px 10px" }}
+                      >
+                        Revoke
+                      </button>
+
+                      {/* Compromised */}
+                      <button
+                        onClick={() => handleCompromised(d.deviceId)}
+                        style={{ padding: "4px 10px" }}
+                        disabled={isCompromised}
+                        title={isCompromised ? "Already compromised" : "Mark compromised + revoke"}
+                      >
+                        Compromised
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+
             {devices.length === 0 && (
               <tr>
-                <td style={td} colSpan={7}>
+                <td style={td} colSpan={8}>
                   No devices yet.
                 </td>
               </tr>
