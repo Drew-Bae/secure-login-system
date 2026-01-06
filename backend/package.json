@@ -8,6 +8,8 @@
     "start": "node src/server.js",
     "test": "cross-env NODE_ENV=test jest --runInBand",
     "test:watch": "cross-env NODE_ENV=test jest --watchAll"
+    ,"seed:admin": "node src/seed/cli.js admin"
+    ,"seed:demo": "node src/seed/cli.js demo"
   },
   "keywords": [],
   "author": "",
