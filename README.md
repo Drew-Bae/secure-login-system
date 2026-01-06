@@ -13,8 +13,8 @@ The live demo includes working registration, login, logout, secure HttpOnly cook
 ### **🔐 Demo Admin Account (for testing the Admin Dashboard)**
 A temporary admin user is provided so reviewers can access the admin dashboard and inspect suspicious login activity. The admin account exists solely for demonstration purposes and has limited access. No sensitive data is stored:
 ```makefile
-Email: admin@example.com  
-Password: pass123
+Email: admin@example.com
+Password: AdminPassword123!
 ```
 This account allows access to:
 - Recent login attempts
@@ -26,13 +26,20 @@ This account allows access to:
 - [Demo flow (reviewer guide)](docs/DEMO_FLOW.md)
 - [API reference](docs/API.md)
 
-## Current Phase 3 (In Progress)
-### **Advanced Suspicious Login Detection**
-- More advanced heuristics (geo-based “impossible travel”)  
-- IP reputation and ASN considerations  
-- Risk scoring system  
-- Step-up authentication when risk is high  
-- User-visible login history  
+## Project Status
+Feature-complete for portfolio/demo purposes ✅
+
+This repo includes:
+- Email verification + password reset
+- MFA (TOTP) + backup codes
+- Device tracking (trusted/untrusted/compromised) with per-device session revocation
+- Login attempt logging + risk scoring (new device, new IP, recent failures, impossible travel, etc.)
+- Step-up authentication (email step-up or MFA step-up)
+- Admin Security Console:
+  - Users (lock/unlock, revoke sessions, force password reset)
+  - Login attempts (filtering + risk metadata)
+  - Audit log + export (CSV/JSON)
+  - Blocked IP management
 
 ## Roadmap
 
