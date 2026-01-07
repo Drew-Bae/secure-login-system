@@ -81,7 +81,17 @@ app.use(blockIpMiddleware);
 
 // Routes
 app.use("/api/auth", authRoutes);
-app.use("/api/admin", adminRoutes);
+// Admin console (recommended: disable on public demos so visitors' IPs/logs aren't exposed)
+const enableAdminConsole =
+  process.env.ENABLE_ADMIN_CONSOLE === "true" ||
+  (process.env.NODE_ENV !== "production" && process.env.ENABLE_ADMIN_CONSOLE !== "false");
+
+if (enableAdminConsole) {
+  app.use("/api/admin", adminRoutes);
+} else {
+  // Hide admin routes on public deployments
+  app.use("/api/admin", (req, res) => res.status(404).json({ message: "Not found" }));
+}
 app.use("/api/mfa", mfaRoutes);
 app.use("/api/devices", deviceRoutes);
 

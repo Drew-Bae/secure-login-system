@@ -1,4 +1,5 @@
 const request = require("supertest");
+const crypto = require("crypto");
 const mongoose = require("mongoose");
 const { MongoMemoryServer } = require("mongodb-memory-server");
 const bcrypt = require("bcrypt");
@@ -13,6 +14,10 @@ async function mintCsrf(agent) {
   const csrfToken = res.body.csrfToken;
   if (!csrfToken) throw new Error("CSRF token missing from /api/auth/csrf");
   return csrfToken;
+}
+
+function makePassword() {
+  return crypto.randomBytes(16).toString("base64url");
 }
 
 describe("Auth integration", () => {
@@ -45,6 +50,8 @@ describe("Auth integration", () => {
   });
 
   test("register -> login -> me -> logout -> me (401)", async () => {
+    const plainPassword = makePassword();
+
     const agent = request.agent(app);
 
     // CSRF for register
@@ -53,7 +60,7 @@ describe("Auth integration", () => {
     await agent
       .post("/api/auth/register")
       .set("x-csrf-token", csrf1)
-      .send({ email: "user@test.com", password: "Password123!" })
+      .send({ email: "user@test.com", password: plainPassword })
       .expect(201);
 
     // CSRF for login
@@ -63,7 +70,7 @@ describe("Auth integration", () => {
       .post("/api/auth/login")
       .set("x-csrf-token", csrf2)
       .set("x-device-id", "device-test-1")
-      .send({ email: "user@test.com", password: "Password123!" })
+      .send({ email: "user@test.com", password: plainPassword })
       .expect(200);
 
     // token cookie should be set
@@ -87,8 +94,9 @@ describe("Auth integration", () => {
   });
 
   test("admin route is 403 for non-admin, 200 for admin", async () => {
-    const userPw = await bcrypt.hash("Password123!", 10);
-    const adminPw = await bcrypt.hash("Password123!", 10);
+    const plainPassword = makePassword();
+    const userPw = await bcrypt.hash(plainPassword, 10);
+    const adminPw = await bcrypt.hash(plainPassword, 10);
 
     await User.create({ email: "user@test.com", password: userPw, role: "user" });
     await User.create({ email: "admin@test.com", password: adminPw, role: "admin" });
@@ -100,7 +108,7 @@ describe("Auth integration", () => {
       .post("/api/auth/login")
       .set("x-csrf-token", csrfU)
       .set("x-device-id", "device-user")
-      .send({ email: "user@test.com", password: "Password123!" })
+      .send({ email: "user@test.com", password: plainPassword })
       .expect(200);
 
     await userAgent.get("/api/admin/login-attempts").expect(403);
@@ -112,13 +120,15 @@ describe("Auth integration", () => {
       .post("/api/auth/login")
       .set("x-csrf-token", csrfA)
       .set("x-device-id", "device-admin")
-      .send({ email: "admin@test.com", password: "Password123!" })
+      .send({ email: "admin@test.com", password: plainPassword })
       .expect(200);
 
     await adminAgent.get("/api/admin/login-attempts").expect(200);
   });
 
   test("logout-all revokes other active sessions", async () => {
+    const plainPassword = makePassword();
+
     // Two separate browser sessions
     const agentA = request.agent(app);
     const agentB = request.agent(app);
@@ -128,7 +138,7 @@ describe("Auth integration", () => {
     await agentA
       .post("/api/auth/register")
       .set("x-csrf-token", csrfReg)
-      .send({ email: "multi@test.com", password: "Password123!" })
+      .send({ email: "multi@test.com", password: plainPassword })
       .expect(201);
 
     // Login on agentA
@@ -137,7 +147,7 @@ describe("Auth integration", () => {
       .post("/api/auth/login")
       .set("x-csrf-token", csrfA1)
       .set("x-device-id", "device-A")
-      .send({ email: "multi@test.com", password: "Password123!" })
+      .send({ email: "multi@test.com", password: plainPassword })
       .expect(200);
 
     // Login on agentB
@@ -146,7 +156,7 @@ describe("Auth integration", () => {
       .post("/api/auth/login")
       .set("x-csrf-token", csrfB1)
       .set("x-device-id", "device-B")
-      .send({ email: "multi@test.com", password: "Password123!" })
+      .send({ email: "multi@test.com", password: plainPassword })
       .expect(200);
 
     // Sanity: both are authenticated
@@ -165,6 +175,9 @@ describe("Auth integration", () => {
   });
 
   test("lockout after 5 failed logins: 6th attempt returns 429", async () => {
+    const plainPassword = makePassword();
+    const wrongPassword = makePassword();
+
     const agent = request.agent(app);
 
     // register
@@ -172,7 +185,7 @@ describe("Auth integration", () => {
     await agent
       .post("/api/auth/register")
       .set("x-csrf-token", csrfReg)
-      .send({ email: "lock@test.com", password: "Password123!" })
+      .send({ email: "lock@test.com", password: plainPassword })
       .expect(201);
 
     // mint one CSRF token for repeated attempts
@@ -184,7 +197,7 @@ describe("Auth integration", () => {
         .post("/api/auth/login")
         .set("x-csrf-token", csrf)
         .set("x-device-id", "device-lockout")
-        .send({ email: "lock@test.com", password: "WrongPassword123!" })
+        .send({ email: "lock@test.com", password: wrongPassword })
         .expect(400);
     }
 
@@ -193,7 +206,7 @@ describe("Auth integration", () => {
       .post("/api/auth/login")
       .set("x-csrf-token", csrf)
       .set("x-device-id", "device-lockout")
-      .send({ email: "lock@test.com", password: "WrongPassword123!" })
+      .send({ email: "lock@test.com", password: wrongPassword })
       .expect(429);
   });
 });

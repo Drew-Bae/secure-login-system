@@ -11,6 +11,12 @@ function boolEnv(name, def = false) {
   return v === "true" || v === "1" || v === "yes";
 }
 
+function requireEnv(name) {
+  const v = (process.env[name] || "").trim();
+  if (!v) throw new Error(`Missing required env var: ${name}`);
+  return v;
+}
+
 async function upsertUser({ email, password, role, forcePassword = false }) {
   const normalized = String(email).toLowerCase().trim();
   const existing = await User.findOne({ email: normalized });
@@ -63,11 +69,11 @@ async function seedDemo() {
   const reset = boolEnv("SEED_DEMO_RESET", true);
   const forcePw = boolEnv("SEED_DEMO_FORCE_PASSWORD", true);
 
-  const adminEmail = process.env.DEMO_ADMIN_EMAIL || "admin@example.com";
-  const adminPassword = process.env.DEMO_ADMIN_PASSWORD || "AdminPassword123!";
+    const adminEmail = requireEnv("DEMO_ADMIN_EMAIL");
+    const adminPassword = requireEnv("DEMO_ADMIN_PASSWORD");
 
-  const userEmail = process.env.DEMO_USER_EMAIL || "user@example.com";
-  const userPassword = process.env.DEMO_USER_PASSWORD || "UserPassword123!";
+    const userEmail = requireEnv("DEMO_USER_EMAIL");
+    const userPassword = requireEnv("DEMO_USER_PASSWORD");
 
   const admin = await upsertUser({
     email: adminEmail,
@@ -224,16 +230,7 @@ async function seedDemo() {
     { ordered: false }
   ).catch(() => {});
 
-  console.log("\n✅ Demo data seeded\n");
-  console.log("Admin login:");
-  console.log(`  email:    ${admin.email}`);
-  console.log(`  password: ${adminPassword}\n`);
-  console.log("User login:");
-  console.log(`  email:    ${user.email}`);
-  console.log(`  password: ${userPassword}\n`);
-  console.log("Notes:");
-  console.log("  - Devices page will show trusted/untrusted/compromised demo devices.");
-  console.log("  - Admin Audit + Login Attempts will have sample entries.\n");
+  console.log("✅ Demo data seeded.");
 }
 
 module.exports = { seedDemo };

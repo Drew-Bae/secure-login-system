@@ -191,7 +191,7 @@ export default function AdminLoginAttempts() {
                 <tr key={a._id}>
                   <td style={tdStyle}>{new Date(a.createdAt).toLocaleString()}</td>
                   <td style={tdStyle}>{a.email}</td>
-                  <td style={tdStyle}>{a.ip || "-"}</td>
+                  <td style={tdStyle}>{maskIp(a.ip)}</td>
                   <td style={tdStyle}>
                     {a.geo?.country ? `${a.geo.country}${a.geo.city ? " / " + a.geo.city : ""}` : "-"}
                   </td>
@@ -234,6 +234,29 @@ export default function AdminLoginAttempts() {
     </div>
   );
 }
+
+
+function maskIp(ip) {
+  const s = String(ip || "").trim();
+  if (!s) return "—";
+
+  // IPv4 masking: keep /24
+  if (s.includes(".") && !s.includes(":")) {
+    const parts = s.split(".");
+    if (parts.length === 4) return `${parts[0]}.${parts[1]}.${parts[2]}.0/24`;
+    return s;
+  }
+
+  // IPv6 masking (rough): keep /48-ish prefix
+  if (s.includes(":")) {
+    const parts = s.split(":").filter(Boolean);
+    const prefix = parts.slice(0, 3).join(":");
+    return prefix ? `${prefix}::/48` : "—";
+  }
+
+  return s;
+}
+
 
 const thStyle = {
   borderBottom: "1px solid #ccc",

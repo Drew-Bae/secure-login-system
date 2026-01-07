@@ -9,18 +9,11 @@ This project starts with a fully working login system and progressively adds adv
 - Frontend: https://secure-login-system-delta.vercel.app/
 - API Health Check (open first and make sure it is running): https://secure-login-system-zhsn.onrender.com
 
-The live demo includes working registration, login, logout, secure HttpOnly cookie handling, login attempt logging, basic suspicious login detection, and an admin view for recent login activity.
-### **🔐 Demo Admin Account (for testing the Admin Dashboard)**
-A temporary admin user is provided so reviewers can access the admin dashboard and inspect suspicious login activity. The admin account exists solely for demonstration purposes and has limited access. No sensitive data is stored:
-```makefile
-Email: admin@example.com
-Password: AdminPassword123!
-```
-This account allows access to:
-- Recent login attempts
-- Suspicious activity flags
-- IP and User-Agent metadata
-- Detection reasons (multiple failures, new IP, etc.)
+The live demo includes working registration, login, logout, secure HttpOnly cookie handling, login attempt logging, basic suspicious login detection, and security logging features.
+### Admin Dashboard
+The admin security console is **not enabled on the public live demo** (to protect visitor privacy). It is showcased via a recorded demo video instead.
+
+To test the admin dashboard locally, create your **own** admin user via the seeding script (see **Getting Started (Local)**).
 
 ## Documentation
 - [Demo flow (reviewer guide)](docs/DEMO_FLOW.md)
@@ -156,7 +149,7 @@ Add to `backend/.env`:
 ```env
 SEED_ADMIN=true
 SEED_ADMIN_EMAIL=admin@example.com
-SEED_ADMIN_PASSWORD=pass123
+SEED_ADMIN_PASSWORD=choose-a-strong-password
 # Only set this to true temporarily if the admin already exists locally and you want to reset it
 SEED_ADMIN_FORCE_PASSWORD=false
 ```
