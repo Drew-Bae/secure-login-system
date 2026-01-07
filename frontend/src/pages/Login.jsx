@@ -137,7 +137,8 @@ export default function Login() {
       if (code === 403 && data?.actionRequired === "VERIFY_EMAIL") {
         setVerifyRequired(true);
         setVerifyMsg(data?.message || "Please verify your email to continue.");
-        setStatus({ type: "error", message: data?.message || "Please verify your email to continue." });
+        // Message is rendered in the Verify Email panel below; avoid duplicating it via `status`.
+        setStatus(null);
         return;
       }
 
@@ -145,7 +146,8 @@ export default function Login() {
       if (code === 403 && data?.actionRequired === "FORCE_PASSWORD_RESET") {
         setResetRequired(true);
         setResetMsg(data?.message || "Password reset required.");
-        setStatus({ type: "error", message: data?.message || "Password reset required." });
+        // Message is rendered in the Reset panel below; avoid duplicating it via `status`.
+        setStatus(null);
         return;
       }
 
