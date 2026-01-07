@@ -11,16 +11,9 @@ This project starts with a fully working login system and progressively adds adv
 
 The live demo includes working registration, login, logout, secure HttpOnly cookie handling, login attempt logging, basic suspicious login detection, and an admin view for recent login activity.
 ### **🔐 Demo Admin Account (for testing the Admin Dashboard)**
-A temporary admin user is provided so reviewers can access the admin dashboard and inspect suspicious login activity. The admin account exists solely for demonstration purposes and has limited access. No sensitive data is stored:
-```makefile
-Email: admin@example.com
-Password: AdminPassword123!
-```
-This account allows access to:
-- Recent login attempts
-- Suspicious activity flags
-- IP and User-Agent metadata
-- Detection reasons (multiple failures, new IP, etc.)
+The admin security console is **not enabled on the public live demo** (to protect visitor privacy). It is showcased via screenshots instead.  
+
+To test the admin dashboard locally, create your **own** admin user via the seeding script (see **Getting Started (Local)**).
 
 ## Documentation
 - [Demo flow (reviewer guide)](docs/DEMO_FLOW.md)
