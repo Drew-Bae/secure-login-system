@@ -279,8 +279,12 @@ export default function Security() {
                   type="password"
                   value={pwNew}
                   onChange={(e) => setPwNew(e.target.value)}
+                  minLength={12}
                   style={{ width: "100%", padding: "8px 10px", marginTop: 4 }}
                 />
+                <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
+                  At least 12 characters, with uppercase, lowercase, number, and a special character.
+                </div>
               </label>
 
               <label style={{ display: "block", marginTop: 10 }}>
@@ -289,6 +293,7 @@ export default function Security() {
                   type="password"
                   value={pwConfirm}
                   onChange={(e) => setPwConfirm(e.target.value)}
+                  minLength={12}
                   style={{ width: "100%", padding: "8px 10px", marginTop: 4 }}
                 />
               </label>

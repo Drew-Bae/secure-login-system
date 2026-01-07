@@ -25,6 +25,11 @@ const { loginAttemptTracker } = require("../middleware/loginAttemptTracker");
 const StepUpChallenge = require("../models/StepUpChallenge");
 const { generateToken, hashToken } = require("../utils/stepUpTokens");
 const { writeAudit } = require("../utils/audit");
+const {
+  validatePasswordComplexity,
+  isReusedPassword,
+  pushPasswordHistory,
+} = require("../utils/passwordPolicy");
 
 function getClientUrlBase() {
   const single = (process.env.CLIENT_URL || "").trim();
@@ -225,9 +230,19 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ message: "Email already registered" });
     }
 
+    // Password policy
+    const pwCheck = validatePasswordComplexity(password, { email: normalizedEmail });
+    if (!pwCheck.ok) {
+      return res.status(400).json({ message: pwCheck.message || "Password does not meet requirements." });
+    }
+
     const hashed = await bcrypt.hash(password, 10);
 
-    const user = await User.create({ email: normalizedEmail, password: hashed });
+    const user = await User.create({
+      email: normalizedEmail,
+      password: hashed,
+      passwordHistory: [],
+    });
     await issueEmailVerification(user);
 
     return res
@@ -341,25 +356,27 @@ router.post("/reset-password", async (req, res) => {
       });
     }
 
-    // Basic password policy (keep consistent with /change-password)
-    if (String(password).length < 8) {
-      return res.status(400).json({ message: "New password must be at least 8 characters." });
+    // Password policy
+    const pwCheck = validatePasswordComplexity(password, { email: user.email });
+    if (!pwCheck.ok) {
+      return res.status(400).json({ message: pwCheck.message || "Password does not meet requirements." });
     }
 
-    // Prevent re-using the same password (especially important for admin-forced resets)
-    if (user.password) {
-      const same = await bcrypt.compare(String(password), user.password);
-      if (same) {
-        return res.status(400).json({
-          message: "New password must be different from your current password.",
-        });
-      }
+    // Prevent re-using the current password or any of the last 5 passwords
+    const reused = await isReusedPassword(user, password);
+    if (reused) {
+      return res.status(400).json({
+        message: "New password cannot match your current password or any of your last 5 passwords.",
+      });
     }
 
     // Hash new password
+    const previousHash = user.password;
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Update password and invalidate token
+    // Store previous password hash in history (cap last 5)
+    pushPasswordHistory(user, previousHash);
     user.password = hashedPassword;
     user.resetPasswordTokenHash = undefined;
     user.resetPasswordExpiresAt = undefined;
@@ -394,26 +411,31 @@ router.post("/change-password", requireAuth, async (req, res) => {
       return res.status(400).json({ message: "Current password and new password are required." });
     }
 
-    // Keep it simple (you can upgrade to zxcvbn later)
-    if (String(newPassword).length < 8) {
-      return res.status(400).json({ message: "New password must be at least 8 characters." });
-    }
-
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Password policy
+    const pwCheck = validatePasswordComplexity(newPassword, { email: user.email });
+    if (!pwCheck.ok) {
+      return res.status(400).json({ message: pwCheck.message || "Password does not meet requirements." });
+    }
 
     const ok = await bcrypt.compare(currentPassword, user.password);
     if (!ok) {
       return res.status(400).json({ message: "Current password is incorrect." });
     }
 
-    // prevent no-op change
-    const same = await bcrypt.compare(newPassword, user.password);
-    if (same) {
-      return res.status(400).json({ message: "New password must be different from your current password." });
+    // Prevent re-using the current password or any of the last 5 passwords
+    const reused = await isReusedPassword(user, newPassword);
+    if (reused) {
+      return res.status(400).json({
+        message: "New password cannot match your current password or any of your last 5 passwords.",
+      });
     }
 
+    const previousHash = user.password;
     user.password = await bcrypt.hash(newPassword, 10);
+    pushPasswordHistory(user, previousHash);
 
     // Revoke sessions after password change
     user.tokenVersion = (user.tokenVersion || 0) + 1;

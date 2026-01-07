@@ -60,10 +60,13 @@ export default function ResetPassword() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={8}
+            minLength={12}
             style={{ display: "block", width: "100%", marginTop: 4 }}
             disabled={done}
           />
+          <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
+            At least 12 characters, with uppercase, lowercase, number, and a special character.
+          </div>
         </label>
 
         <button

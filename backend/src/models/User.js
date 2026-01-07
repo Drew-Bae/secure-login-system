@@ -14,6 +14,9 @@ const userSchema = new mongoose.Schema(
       required: true,
       minlength: 6,
     },
+    // Store hashes of previous passwords (most recent first). Used to prevent password reuse.
+    // We keep only the last 5 previous passwords.
+    passwordHistory: [{ type: String }],
     tokenVersion: { type: Number, default: 0 },
     failedLoginCount: { type: Number, default: 0 },
     lockoutUntil: { type: Date },

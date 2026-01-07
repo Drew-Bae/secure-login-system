@@ -79,9 +79,12 @@ export default function Register() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={6}
+            minLength={12}
             style={{ display: "block", width: "100%", marginTop: 4 }}
           />
+          <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
+            At least 12 characters, with upper, lower, number, and a special character.
+          </div>
         </label>
 
         <button
