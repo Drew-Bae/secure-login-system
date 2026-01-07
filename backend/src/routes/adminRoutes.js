@@ -28,27 +28,6 @@ function parseDateMaybe(v) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function maskIp(ip) {
-  const s = String(ip || "").trim();
-  if (!s) return "";
-
-  // IPv4 -> /24 masking
-  if (s.includes(".") && !s.includes(":")) {
-    const parts = s.split(".");
-    if (parts.length === 4) return `${parts[0]}.${parts[1]}.${parts[2]}.0/24`;
-    return s;
-  }
-
-  // IPv6 -> /48-ish masking
-  if (s.includes(":")) {
-    const parts = s.split(":").filter(Boolean);
-    const prefix = parts.slice(0, 3).join(":");
-    return prefix ? `${prefix}::/48` : "";
-  }
-
-  return s;
-}
-
 function getClientUrlBase() {
   const single = (process.env.CLIENT_URL || "").trim();
   if (single) return single.replace(/\/$/, "");
@@ -424,8 +403,7 @@ router.get("/audit/export.json", requireAuth, requireAdmin, async (req, res) => 
 
     res.setHeader("Content-Type", "application/json");
     res.setHeader("Content-Disposition", 'attachment; filename="audit-export.json"');
-    const safeEvents = events.map((e) => ({ ...(typeof e.toObject === "function" ? e.toObject() : e), ip: maskIp(e.ip) }));
-    return res.send(JSON.stringify(safeEvents, null, 2));
+    return res.send(JSON.stringify(events, null, 2));
   } catch (err) {
     console.error("Admin audit export.json error:", err);
     return res.status(err.status || 500).json({ message: err.message || "Server error" });
@@ -490,7 +468,7 @@ router.get("/audit/export.csv", requireAuth, requireAdmin, async (req, res) => {
         csvEscape(targetEmail),
         csvEscape(targetRole),
         csvEscape(e.targetDeviceId || ""),
-        csvEscape(maskIp(e.ip) || ""),
+        csvEscape(e.ip || ""),
         csvEscape(e.userAgent || ""),
         csvEscape(meta),
       ].join(",");

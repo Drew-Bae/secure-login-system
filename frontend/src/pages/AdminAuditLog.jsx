@@ -151,7 +151,7 @@ export default function AdminAuditLog() {
                 </td>
                 <td style={td}>{e.action}</td>
                 <td style={td}>{e.targetUserId?.email || e.targetDeviceId || "—"}</td>
-                <td style={td}>{maskIp(e.ip)}</td>
+                <td style={td}>{e.ip || "—"}</td>
                 <td style={td}>{truncate(e.userAgent || "—", 80)}</td>
                 <td style={td}>
                   <details>
@@ -209,29 +209,6 @@ function truncate(s, n) {
   const str = String(s);
   return str.length > n ? str.slice(0, n - 1) + "…" : str;
 }
-
-
-function maskIp(ip) {
-  const s = String(ip || "").trim();
-  if (!s) return "—";
-
-  // IPv4 masking: keep /24
-  if (s.includes(".") && !s.includes(":")) {
-    const parts = s.split(".");
-    if (parts.length === 4) return `${parts[0]}.${parts[1]}.${parts[2]}.0/24`;
-    return s;
-  }
-
-  // IPv6 masking (rough): keep /48-ish prefix
-  if (s.includes(":")) {
-    const parts = s.split(":").filter(Boolean);
-    const prefix = parts.slice(0, 3).join(":");
-    return prefix ? `${prefix}::/48` : "—";
-  }
-
-  return s;
-}
-
 
 const th = { borderBottom: "1px solid #ccc", textAlign: "left", padding: "8px 6px" };
 const td = { borderBottom: "1px solid #eee", padding: "6px 6px", verticalAlign: "top" };
