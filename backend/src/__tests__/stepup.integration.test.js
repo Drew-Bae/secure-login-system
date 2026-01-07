@@ -150,4 +150,45 @@ describe("Step-up verification integration", () => {
     const setCookie = res.headers["set-cookie"] || [];
     expect(setCookie.join(";")).toMatch(/token=/);
   });
+
+
+  test("Login does not bypass step-up by retrying without verification", async () => {
+    const agent = request.agent(app);
+
+    const password = await bcrypt.hash("Password123!", 10);
+    // Make the account older than the new-account grace window
+    const user = await User.create({
+      email: "user2@test.com",
+      password,
+      role: "user",
+      createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
+    });
+
+    const csrf = await mintCsrf(agent);
+
+    const deviceId = "device-stepup-bypass-1";
+
+    // First login should require step-up (new device)
+    const res1 = await agent
+      .post("/api/auth/login")
+      .set("x-csrf-token", csrf)
+      .set("x-device-id", deviceId)
+      .send({ email: user.email, password: "Password123!" })
+      .expect(200);
+
+    expect(res1.body?.stepUpRequired).toBe(true);
+
+    // Second login attempt (same conditions) should STILL require step-up
+    const res2 = await agent
+      .post("/api/auth/login")
+      .set("x-csrf-token", csrf)
+      .set("x-device-id", deviceId)
+      .send({ email: user.email, password: "Password123!" })
+      .expect(200);
+
+    expect(res2.body?.stepUpRequired).toBe(true);
+
+    const setCookie = (res2.headers["set-cookie"] || []).join(";");
+    expect(setCookie).not.toMatch(/token=/);
+  });
 });

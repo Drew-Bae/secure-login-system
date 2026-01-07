@@ -180,6 +180,25 @@ function calcDelayMs(fails) {
   return Math.min(4000, base * (2 ** pow) + jitter);
 }
 
+
+function isCompletedLoginAttempt(attempt) {
+  if (!attempt) return false;
+  const reasons = Array.isArray(attempt.reasons) ? attempt.reasons : [];
+
+  // Attempts that did NOT result in an issued auth cookie (i.e., not a real session)
+  // should not be treated as a successful login for risk baselining (IP/device familiarity).
+  const nonCompletedTags = [
+    "stepup_required",
+    "mfa_required",
+    "verify_email_required",
+    "force_password_reset_required",
+    "risk_blocked",
+  ];
+
+  if (reasons.some((t) => nonCompletedTags.includes(t))) return false;
+  return attempt.success === true;
+}
+
 function shouldStepUp({ riskLabel, user }) {
   // riskLabel expected: "low" | "medium" | "high"
   if (riskLabel !== "high") return false;
@@ -493,7 +512,9 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
     const accountAgeHours =
       (Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60);
 
-    const priorSuccessfulLogins = recentAttempts.filter((a) => a.success === true).length;
+    const completedAttempts = recentAttempts.filter(isCompletedLoginAttempt);
+
+    const priorSuccessfulLogins = completedAttempts.length;
 
     const isNewAccount =
       accountAgeHours < NEW_ACCOUNT_GRACE_HOURS &&
@@ -511,9 +532,7 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
 
     // Successful login from a new IP
     if (success && !isNewAccount) {
-      const hasSeenIpBefore = recentAttempts.some(
-        (a) => a.success === true && a.ip === ip
-      );
+      const hasSeenIpBefore = completedAttempts.some((a) => a.ip === ip);
       if (!hasSeenIpBefore) {
         suspiciousReasons.push("new_ip_for_account");
       }
@@ -525,28 +544,14 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
     let deviceDoc = null;
 
     if (success && deviceId && deviceId !== "unknown") {
-      const existedBefore = await TrustedDevice.exists({ userId: user._id, deviceId });
-      isNewDevice = !existedBefore;
-
-      deviceDoc = await TrustedDevice.findOneAndUpdate(
-        { userId: user._id, deviceId },
-        {
-          $setOnInsert: {
-            userId: user._id,
-            deviceId,
-            firstSeenAt: new Date(),
-            trusted: false,
-            tokenVersion: 0,
-          },
-          $set: {
-            lastSeenAt: new Date(),
-            lastIp: ip,
-            lastUserAgent: userAgent,
-            lastGeo: geoObj,
-          },
-        },
-        { upsert: true, new: true }
+      // NOTE: We intentionally do NOT upsert the device record here.
+      // If step-up is required, we don"t want the first attempt to "teach" the system
+      // that this device is now known. The device record is upserted only after a real
+      // session is issued (normal login) or after MFA/step-up verification completes.
+      deviceDoc = await TrustedDevice.findOne({ userId: user._id, deviceId }).select(
+        "trusted tokenVersion compromisedAt"
       );
+      isNewDevice = !deviceDoc;
 
       // If user marked device compromised, do not allow issuing a token for it
       if (deviceDoc?.compromisedAt) {
@@ -560,8 +565,7 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
           suspiciousReasons.push("new_device_for_account");
           suspiciousReasons.push("device_untrusted");
         } else {
-          const known = deviceDoc; // reuse doc we already have
-          if (known && !known.trusted) suspiciousReasons.push("device_untrusted");
+          if (!deviceDoc.trusted) suspiciousReasons.push("device_untrusted");
         }
       }
     }
@@ -570,9 +574,7 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
 
     // Impossible travel heuristic: compare to last successful login with geo
     if (success && geoObj?.ll?.length === 2) {
-      const lastSuccessWithGeo = recentAttempts.find(
-        (a) => a.success === true && a.geo?.ll?.length === 2
-      );
+      const lastSuccessWithGeo = completedAttempts.find((a) => a.geo?.ll?.length === 2);
 
       if (lastSuccessWithGeo) {
         const [lat1, lon1] = lastSuccessWithGeo.geo.ll;
@@ -642,7 +644,7 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
       suspiciousReasons.includes("account_locked");
 
     // Log attempt
-    await LoginAttempt.create({
+    const attempt = await LoginAttempt.create({
       email,
       ip,
       userAgent,
@@ -677,6 +679,15 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
       // ✅ IMPORTANT: in test env, issueEmailVerification() auto-verifies.
       // So only block if the user is STILL not verified.
       if (!user.emailVerifiedAt) {
+        // Mark this as a non-completed login so it doesn't baseline risk history
+        if (attempt) {
+          attempt.reasons = Array.isArray(attempt.reasons) ? attempt.reasons : [];
+          if (!attempt.reasons.includes('verify_email_required')) {
+            attempt.reasons.push('verify_email_required');
+            await attempt.save();
+          }
+        }
+
         return res.status(403).json({
           message: "Please verify your email to continue.",
           actionRequired: "VERIFY_EMAIL",
@@ -697,6 +708,15 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
         await issuePasswordReset(user, 60); // longer TTL for forced resets
       }
 
+      // Mark this as a non-completed login so it doesn't baseline risk history
+      if (attempt) {
+        attempt.reasons = Array.isArray(attempt.reasons) ? attempt.reasons : [];
+        if (!attempt.reasons.includes('force_password_reset_required')) {
+          attempt.reasons.push('force_password_reset_required');
+          await attempt.save();
+        }
+      }
+
       return res.status(403).json({
         message: "Password reset required. Please reset your password to continue.",
         actionRequired: "FORCE_PASSWORD_RESET",
@@ -709,6 +729,15 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
 
     if (stepUpRequired) {
       const preAuthToken = createPreAuthToken(user._id);
+
+      // Mark this as a non-completed login so it doesn't baseline risk history
+      if (attempt) {
+        attempt.reasons = Array.isArray(attempt.reasons) ? attempt.reasons : [];
+        if (!attempt.reasons.includes(user.mfaEnabled ? "mfa_required" : "stepup_required")) {
+          attempt.reasons.push(user.mfaEnabled ? "mfa_required" : "stepup_required");
+          await attempt.save();
+        }
+      }
 
       // Prefer MFA when enabled
       if (user.mfaEnabled) {
@@ -734,8 +763,16 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
     if (user.mfaEnabled) {
       const preAuthToken = createPreAuthToken(user._id);
 
+      // Mark this as a non-completed login so it doesn't baseline risk history
+      if (attempt) {
+        attempt.reasons = Array.isArray(attempt.reasons) ? attempt.reasons : [];
+        if (!attempt.reasons.includes("mfa_required")) {
+          attempt.reasons.push("mfa_required");
+          await attempt.save();
+        }
+      }
+
       // Log the attempt as success=true (password correct), but MFA pending
-      // (You can optionally add another reason like "mfa_required".)
       return res.json({
         message: "MFA required",
         mfaRequired: true,
@@ -750,6 +787,15 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
     // (Don't issue the auth cookie yet)
     if (!user.mfaEnabled && success && highRisk && !blockRisk) {
       const preAuthToken = createPreAuthToken(user._id);
+
+      // Mark this as a non-completed login so it doesn't baseline risk history
+      if (attempt) {
+        attempt.reasons = Array.isArray(attempt.reasons) ? attempt.reasons : [];
+        if (!attempt.reasons.includes("stepup_required")) {
+          attempt.reasons.push("stepup_required");
+          await attempt.save();
+        }
+      }
 
       return res.status(200).json({
         stepUpRequired: true,
@@ -772,6 +818,15 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
 
     // Risk-based policy when MFA is NOT enabled
     if (!user.mfaEnabled && success && blockRisk) {
+      // Mark this as a non-completed login so it doesn't baseline risk history
+      if (attempt) {
+        attempt.reasons = Array.isArray(attempt.reasons) ? attempt.reasons : [];
+        if (!attempt.reasons.includes("risk_blocked")) {
+          attempt.reasons.push("risk_blocked");
+          await attempt.save();
+        }
+      }
+
       // Log attempt already recorded; do NOT issue JWT
       return res.status(403).json({
         message: "High-risk login blocked. Please enable MFA to continue.",
@@ -779,6 +834,35 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
         riskScore,
         reasons: suspiciousReasons,
       });
+    }
+
+    // Upsert device record ONLY when we are about to issue a real session
+    if (deviceId && deviceId !== "unknown") {
+      deviceDoc = await TrustedDevice.findOneAndUpdate(
+        { userId: user._id, deviceId },
+        {
+          $setOnInsert: {
+            userId: user._id,
+            deviceId,
+            firstSeenAt: new Date(),
+            trusted: false,
+            tokenVersion: 0,
+          },
+          $set: {
+            lastSeenAt: new Date(),
+            lastIp: ip,
+            lastUserAgent: userAgent,
+            lastGeo: geoObj,
+          },
+        },
+        { upsert: true, new: true }
+      ).select("tokenVersion compromisedAt trusted");
+
+      if (deviceDoc?.compromisedAt) {
+        return res.status(401).json({
+          message: "This device is marked compromised. Use another device or revoke it in Devices.",
+        });
+      }
     }
 
     const token = createToken({
@@ -789,6 +873,7 @@ router.post("/login", loginAttemptTracker, loginLimiter, async (req, res) => {
 
 
     res.cookie("token", token, authCookieOptions());
+
 
     return res.json({ 
       message: "Logged in",
@@ -886,19 +971,39 @@ router.post("/verify-stepup", async (req, res) => {
     challenge.usedAt = new Date();
     await challenge.save();
 
-    // Ensure device isn't compromised + get tokenVersion for device-bound JWT
+    // Upsert device record when step-up is verified (this is a real session)
     let deviceDoc = null;
     if (deviceId !== "unknown") {
-      deviceDoc = await TrustedDevice.findOne({ userId: user._id, deviceId }).select(
-        "tokenVersion compromisedAt"
-      );
+      const geo = geoip.lookup(ip);
+      const geoObj = geo
+        ? { country: geo.country, region: geo.region, city: geo.city, ll: geo.ll }
+        : undefined;
+
+      deviceDoc = await TrustedDevice.findOneAndUpdate(
+        { userId: user._id, deviceId },
+        {
+          $setOnInsert: {
+            userId: user._id,
+            deviceId,
+            firstSeenAt: new Date(),
+            trusted: false,
+            tokenVersion: 0,
+          },
+          $set: {
+            lastSeenAt: new Date(),
+            lastIp: ip,
+            lastUserAgent: userAgent,
+            lastGeo: geoObj,
+          },
+        },
+        { upsert: true, new: true }
+      ).select("tokenVersion compromisedAt");
+
       if (deviceDoc?.compromisedAt) {
         return res.status(401).json({ message: "Device is compromised" });
       }
     }
 
-    // IMPORTANT: use your *current* createToken signature.
-    // If your createToken expects an object { user, deviceId, deviceTokenVersion }, use that.
     const jwtToken = createToken({
       user,
       deviceId,
@@ -906,6 +1011,20 @@ router.post("/verify-stepup", async (req, res) => {
     });
 
     res.cookie("token", jwtToken, authCookieOptions());
+
+    // Record a completed login attempt (for baselining IP/device familiarity)
+    await LoginAttempt.create({
+      email: user.email,
+      ip,
+      userAgent,
+      deviceId,
+      success: true,
+      suspicious: false,
+      reasons: ["stepup_verified"],
+      riskScore: 0,
+      rawRiskScore: 0,
+    });
+
     return res.json({ ok: true });
   } catch (err) {
     console.error("verify-stepup error:", err);
@@ -1023,6 +1142,35 @@ router.post("/mfa-login", mfaLimiter, async (req, res) => {
     }
 
     // Issue the real auth token
+    // Upsert device record ONLY when we are about to issue a real session
+    if (deviceId && deviceId !== "unknown") {
+      deviceDoc = await TrustedDevice.findOneAndUpdate(
+        { userId: user._id, deviceId },
+        {
+          $setOnInsert: {
+            userId: user._id,
+            deviceId,
+            firstSeenAt: new Date(),
+            trusted: false,
+            tokenVersion: 0,
+          },
+          $set: {
+            lastSeenAt: new Date(),
+            lastIp: ip,
+            lastUserAgent: userAgent,
+            lastGeo: geoObj,
+          },
+        },
+        { upsert: true, new: true }
+      ).select("tokenVersion compromisedAt trusted");
+
+      if (deviceDoc?.compromisedAt) {
+        return res.status(401).json({
+          message: "This device is marked compromised. Use another device or revoke it in Devices.",
+        });
+      }
+    }
+
     const token = createToken({
       user,
       deviceId,
@@ -1031,6 +1179,7 @@ router.post("/mfa-login", mfaLimiter, async (req, res) => {
 
 
     res.cookie("token", token, authCookieOptions());
+
 
     return res.json({
       message: backupUsed ? "Logged in with backup code" : "Logged in with MFA",
