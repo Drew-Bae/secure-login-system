@@ -341,6 +341,21 @@ router.post("/reset-password", async (req, res) => {
       });
     }
 
+    // Basic password policy (keep consistent with /change-password)
+    if (String(password).length < 8) {
+      return res.status(400).json({ message: "New password must be at least 8 characters." });
+    }
+
+    // Prevent re-using the same password (especially important for admin-forced resets)
+    if (user.password) {
+      const same = await bcrypt.compare(String(password), user.password);
+      if (same) {
+        return res.status(400).json({
+          message: "New password must be different from your current password.",
+        });
+      }
+    }
+
     // Hash new password
     const hashedPassword = await bcrypt.hash(password, 10);
 
