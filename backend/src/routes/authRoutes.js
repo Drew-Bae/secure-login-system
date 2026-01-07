@@ -31,6 +31,18 @@ const {
   pushPasswordHistory,
 } = require("../utils/passwordPolicy");
 
+function maskEmail(email) {
+  const s = String(email || "");
+  const parts = s.split("@");
+  if (parts.length !== 2) return "***";
+  const [local, domain] = parts;
+  if (!local || !domain) return "***";
+  const keep = Math.min(2, local.length);
+  const head = local.slice(0, keep);
+  const masked = `${head}${"*".repeat(Math.max(3, local.length - keep))}`;
+  return `${masked}@${domain}`;
+}
+
 function getClientUrlBase() {
   const single = (process.env.CLIENT_URL || "").trim();
   if (single) return single.replace(/\/$/, "");
@@ -328,6 +340,36 @@ router.post("/forgot-password", async (req, res) => {
   }
 });
 
+// RESET PASSWORD (info)
+// - used by the reset-password UI to show which account the token targets
+// - also allows the frontend to detect a different signed-in user and log out
+router.get("/reset-password-info", async (req, res) => {
+  try {
+    const token = String(req.query?.token || "").trim();
+    if (!token) return res.status(400).json({ message: "Reset token is required" });
+
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+
+    const user = await User.findOne({
+      resetPasswordTokenHash: tokenHash,
+      resetPasswordExpiresAt: { $gt: new Date() },
+    }).select("email resetPasswordExpiresAt");
+
+    if (!user) {
+      return res.status(400).json({ message: "Reset token is invalid or has expired" });
+    }
+
+    return res.json({
+      userId: user._id,
+      emailMasked: maskEmail(user.email),
+      expiresAt: user.resetPasswordExpiresAt,
+    });
+  } catch (err) {
+    console.error("Reset password info error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
 
 // RESET PASSWORD
 router.post("/reset-password", async (req, res) => {
@@ -390,6 +432,10 @@ router.post("/reset-password", async (req, res) => {
     user.tokenVersion = (user.tokenVersion || 0) + 1;
 
     await user.save();
+
+    // If someone is currently logged in in this browser (e.g., shared machine or admin testing),
+    // clear the auth cookie to avoid the UI showing the wrong signed-in identity.
+    res.clearCookie("token", authCookieClearOptions());
 
     return res.json({ message: "Password reset successful" });
   } catch (err) {

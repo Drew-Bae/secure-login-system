@@ -100,6 +100,11 @@ export function resetPassword({ token, password }) {
   return api.post("/auth/reset-password", { token, password });
 }
 
+// GET /api/auth/reset-password-info
+export function fetchResetPasswordInfo(token) {
+  return api.get("/auth/reset-password-info", { params: { token } });
+}
+
 // POST /api/auth/mfa-login
 export function mfaLogin({ preAuthToken, code }) {
   return api.post("/auth/mfa-login", { preAuthToken, code });
