@@ -58,6 +58,7 @@ export default function AdminUserDetail() {
   const user = payload?.user;
   const devices = payload?.devices || [];
   const attempts = payload?.attempts || [];
+  const notes = payload?.notes || [];
 
   return (
     <div style={{ padding: 24, fontFamily: "system-ui" }}>
@@ -165,6 +166,38 @@ export default function AdminUserDetail() {
               Add Note
             </button>
           </div>
+
+          <h2>Admin Notes</h2>
+          {notes.length === 0 ? (
+            <p>No admin notes.</p>
+          ) : (
+            <div style={{ overflowX: "auto", marginBottom: 24 }}>
+              <table style={{ borderCollapse: "collapse", minWidth: 900, fontSize: 14 }}>
+                <thead>
+                  <tr>
+                    <th style={th}>Time</th>
+                    <th style={th}>Admin</th>
+                    <th style={th}>Note</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {notes.map((n) => (
+                    <tr key={n._id}>
+                      <td style={td}>{n.createdAt ? new Date(n.createdAt).toLocaleString() : "—"}</td>
+                      <td style={td}>
+                        {typeof n.actorUserId === "object" && n.actorUserId?.email
+                          ? n.actorUserId.email
+                          : n.actorUserId || "—"}
+                      </td>
+                      <td style={td}>
+                        {n.meta?.note ? String(n.meta.note) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* ✅ Added: Force reset section */}
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 24 }}>

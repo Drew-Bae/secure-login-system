@@ -264,12 +264,17 @@ router.get("/users/:id", requireAuth, requireAdmin, async (req, res) => {
     );
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    const [devices, attempts] = await Promise.all([
+    const [devices, attempts, notes] = await Promise.all([
       TrustedDevice.find({ userId: user._id }).sort({ lastSeenAt: -1 }).limit(50),
       LoginAttempt.find({ email: user.email }).sort({ createdAt: -1 }).limit(50),
+      AuditEvent.find({ action: "ADMIN_ADD_NOTE", targetUserId: user._id })
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .populate("actorUserId", "email")
+        .select("createdAt actorUserId meta"),
     ]);
 
-    res.json({ user, devices, attempts });
+    res.json({ user, devices, attempts, notes });
   } catch (err) {
     console.error("Admin user detail error:", err);
     res.status(500).json({ message: "Server error" });
